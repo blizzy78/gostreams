@@ -7,7 +7,7 @@ gostreams
 A Go package that provides a set of operations on streams of elements.
 
 ```go
-import github.com/blizzy78/gostreams
+import "github.com/blizzy78/gostreams"
 ```
 
 
