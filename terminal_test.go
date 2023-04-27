@@ -17,7 +17,9 @@ func TestReduce(t *testing.T) {
 
 	ints := Produce([]int{1, 2, 3, 4, 5})
 
-	summer := func(_ context.Context, _ context.CancelCauseFunc, elem int, _ uint64, acc int) int {
+	summer := func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64, acc int) int {
+		is.Equal(index, uint64(elem-1))
+
 		return acc + elem
 	}
 
@@ -33,8 +35,9 @@ func TestReduce_Cancel(t *testing.T) {
 
 	ints := Produce([]int{1, 2, 3, 4, 5})
 
-	summer := func(_ context.Context, cancel context.CancelCauseFunc, elem int, _ uint64, acc int) int {
+	summer := func(_ context.Context, cancel context.CancelCauseFunc, elem int, index uint64, acc int) int {
 		is.True(elem <= 3)
+		is.Equal(index, uint64(elem-1))
 
 		if elem == 3 {
 			cancel(nil)
@@ -81,7 +84,9 @@ func TestEach(t *testing.T) {
 
 	sum := 0
 
-	summer := func(_ context.Context, _ context.CancelCauseFunc, elem int, _ uint64) {
+	summer := func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64) {
+		is.Equal(index, uint64(elem-1))
+
 		sum += elem
 	}
 
@@ -99,8 +104,9 @@ func TestEach_Cancel(t *testing.T) {
 
 	sum := 0
 
-	summer := func(_ context.Context, cancel context.CancelCauseFunc, elem int, _ uint64) {
+	summer := func(_ context.Context, cancel context.CancelCauseFunc, elem int, index uint64) {
 		is.True(elem <= 3)
+		is.Equal(index, uint64(elem-1))
 
 		if elem == 3 {
 			cancel(nil)
@@ -125,7 +131,9 @@ func TestEachConcurrent(t *testing.T) {
 
 	sum := atomic.Int32{}
 
-	summer := func(_ context.Context, _ context.CancelCauseFunc, elem int, _ uint64) {
+	summer := func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64) {
+		is.Equal(index, uint64(elem-1))
+
 		sum.Add(int32(elem))
 	}
 
@@ -186,7 +194,12 @@ func TestAnyMatch(t *testing.T) {
 				return outCh
 			}
 
-			greaterThan10 := func(_ context.Context, _ context.CancelCauseFunc, elem int, _ uint64) bool {
+			expectedIndex := uint64(0)
+
+			greaterThan10 := func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64) bool {
+				is.Equal(index, expectedIndex)
+				expectedIndex++
+
 				return elem > 10
 			}
 
@@ -250,7 +263,12 @@ func TestAllMatch(t *testing.T) {
 				return outCh
 			}
 
-			lessThan10 := func(_ context.Context, _ context.CancelCauseFunc, elem int, _ uint64) bool {
+			expectedIndex := uint64(0)
+
+			lessThan10 := func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64) bool {
+				is.Equal(index, expectedIndex)
+				expectedIndex++
+
 				return elem < 10
 			}
 

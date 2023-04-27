@@ -123,11 +123,6 @@ func FlatMap[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc
 
 		for elem := range ch {
 			prods = append(prods, mapp(ctx, cancel, elem, index))
-
-			if contextDone(ctx) {
-				break
-			}
-
 			index++
 		}
 
@@ -167,11 +162,6 @@ func FlatMapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, Pr
 
 		for elem := range ch {
 			prods = append(prods, mapp(ctx, cancel, elem, index))
-
-			if contextDone(ctx) {
-				break
-			}
-
 			index++
 		}
 
@@ -218,13 +208,14 @@ func Filter[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T
 					return
 				}
 
+				index++
+
 				if !filterResult {
 					continue
 				}
 
 				select {
 				case outCh <- elem:
-					index++
 
 				case <-ctx.Done():
 					return
@@ -319,15 +310,11 @@ func Peek[T any](prod ProducerFunc[T], peek ConsumerFunc[T]) ProducerFunc[T] {
 }
 
 // Limit returns a producer that produces the same elements as prod, in order, up to max elements.
-func Limit[T any](prod ProducerFunc[T], max uint64) ProducerFunc[T] { //nolint:gocognit // it's a bit more involved
+func Limit[T any](prod ProducerFunc[T], max uint64) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
 		prodCtx, cancelProd := context.WithCancelCause(ctx)
 
 		ch := prod(prodCtx, cancel)
-
-		if max == 0 {
-			cancelProd(ErrLimitReached)
-		}
 
 		outCh := make(chan T)
 
@@ -337,6 +324,7 @@ func Limit[T any](prod ProducerFunc[T], max uint64) ProducerFunc[T] { //nolint:g
 			defer close(outCh)
 
 			if max == 0 {
+				cancelProd(ErrLimitReached)
 				return
 			}
 
