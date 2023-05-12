@@ -2,8 +2,8 @@ package gostreams
 
 import "context"
 
-// A DuplicateKeyError is used to short-circuit a stream by canceling its context to indicate that
-// a key could not be added to a map because it already exists.
+// DuplicateKeyError is the error used to short-circuit a stream by canceling its context to indicate that
+// a key couldn't be added to a map because it already exists.
 type DuplicateKeyError[T any, K comparable] struct {
 	// Element is the upstream producer's element that caused the error.
 	Element T
@@ -19,9 +19,8 @@ func CollectSlice[T any]() AccumulatorFunc[T, []T] {
 	}
 }
 
-// CollectMap returns an accumulator that collects elements into a map.
-// Elements are mapped using key and value, respectively.
-// If a key is already in the map, the map entry will be overwritten.
+// CollectMap returns an accumulator that collects elements into a map, using key to map elements to keys,
+// and value to map elements to values. If a key is already in the map, it overwrites the map entry.
 func CollectMap[T any, K comparable, V any](key MapperFunc[T, K], value MapperFunc[T, V]) AccumulatorFunc[T, map[K]V] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64, acc map[K]V) map[K]V {
 		acc[key(ctx, cancel, elem, index)] = value(ctx, cancel, elem, index)
@@ -29,9 +28,9 @@ func CollectMap[T any, K comparable, V any](key MapperFunc[T, K], value MapperFu
 	}
 }
 
-// CollectMapNoDuplicateKeys returns an accumulator that collects elements into a map.
-// Elements are mapped using key and value, respectively.
-// If a key is already in the map, the stream's context will be canceled with a DuplicateKeyError.
+// CollectMapNoDuplicateKeys returns an accumulator that collects elements into a map, using key to map
+// elements to keys, and value to map elements to values. If a key is already in the map, it cancels the stream's context
+// with a DuplicateKeyError.
 func CollectMapNoDuplicateKeys[T any, K comparable, V any](key MapperFunc[T, K], value MapperFunc[T, V]) AccumulatorFunc[T, map[K]V] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64, acc map[K]V) map[K]V {
 		key := key(ctx, cancel, elem, index)
@@ -51,8 +50,8 @@ func CollectMapNoDuplicateKeys[T any, K comparable, V any](key MapperFunc[T, K],
 	}
 }
 
-// CollectGroup returns an accumulator that collects elements into a group map.
-// Elements will be grouped into slices according to key.
+// CollectGroup returns an accumulator that collects elements into a group map, according to key.
+// It uses value to map elements to values.
 func CollectGroup[T any, K comparable, V any](key MapperFunc[T, K], value MapperFunc[T, V]) AccumulatorFunc[T, map[K][]V] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64, acc map[K][]V) map[K][]V {
 		key := key(ctx, cancel, elem, index)
@@ -62,8 +61,8 @@ func CollectGroup[T any, K comparable, V any](key MapperFunc[T, K], value Mapper
 	}
 }
 
-// CollectPartition returns an accumulator that collects elements into a partition map.
-// Elements will be grouped into slices according to pred.
+// CollectPartition returns an accumulator that collects elements into a partition map, according to pred.
+// It uses value to map elements to values.
 func CollectPartition[T any, V any](pred PredicateFunc[T], value MapperFunc[T, V]) AccumulatorFunc[T, map[bool][]V] {
 	return CollectGroup(MapperFunc[T, bool](pred), value)
 }

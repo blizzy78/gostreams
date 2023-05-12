@@ -15,7 +15,7 @@ type Function[T any, U any] func(elem T) U
 // The index is the 0-based index of elem, in the order produced by the upstream producer.
 type MapperFunc[T any, U any] func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64) U
 
-// PredicateFunc returns true elem matches a predicate.
+// PredicateFunc returns true if elem matches a predicate.
 // The index is the 0-based index of elem, in the order produced by the upstream producer.
 type PredicateFunc[T any] func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64) bool
 
@@ -66,8 +66,8 @@ func Map[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) ProducerFunc
 	}
 }
 
-// MapConcurrent returns a producer that concurrently calls mapp for each element produced by prod, mapping it to type U.
-// The order of elements produced by the new producer is undefined.
+// MapConcurrent returns a producer that concurrently calls mapp for each element produced by prod,
+// mapping it to type U. It produces elements in undefined order.
 func MapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
 		ch := prod(ctx, cancel)
@@ -111,8 +111,7 @@ func MapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) Pr
 }
 
 // FlatMap returns a producer that calls mapp for each element produced by prod, mapping it to an intermediate producer
-// that produces elements of type U.
-// The new producer produces all elements produced by the intermediate producers, in order.
+// that produces elements of type U. The new producer produces all elements produced by the intermediate producers, in order.
 func FlatMap[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc[U]]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
 		ch := prod(ctx, cancel)
@@ -150,8 +149,7 @@ func FlatMap[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc
 }
 
 // FlatMapConcurrent returns a producer that calls mapp for each element produced by prod, mapping it to an intermediate producer
-// that produces elements of type U.
-// The new producer produces all elements produced by the intermediate producers, in undefined order.
+// that produces elements of type U. The new producer produces all elements produced by the intermediate producers, in undefined order.
 func FlatMapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc[U]]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
 		ch := prod(ctx, cancel)
@@ -228,8 +226,7 @@ func Filter[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T
 }
 
 // FilterConcurrent returns a producer that calls filter for each element produced by prod, and only produces elements for which
-// filter returns true.
-// The order of elements produced by the new producer is undefined.
+// filter returns true. It produces elements in undefined order.
 func FilterConcurrent[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
 		ch := prod(ctx, cancel)
@@ -310,6 +307,8 @@ func Peek[T any](prod ProducerFunc[T], peek ConsumerFunc[T]) ProducerFunc[T] {
 }
 
 // Limit returns a producer that produces the same elements as prod, in order, up to max elements.
+// Once the limit has been reached, it cancels prod's context with ErrLimitReached (but not the
+// entire stream's context).
 func Limit[T any](prod ProducerFunc[T], max uint64) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
 		prodCtx, cancelProd := context.WithCancelCause(ctx)

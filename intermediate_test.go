@@ -293,7 +293,7 @@ func TestLimit(t *testing.T) { //nolint:gocognit // it's a bit more involved
 			result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
 
 			is.Equal(result, test.want)
-			// is.Equal(<-producerCancelCause, test.wantProducerCancelCause)
+			is.Equal(<-producerCancelCause, test.wantProducerCancelCause)
 		})
 	}
 }

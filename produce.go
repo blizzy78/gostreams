@@ -40,8 +40,8 @@ func ProduceChannel[T any](channels ...<-chan T) ProducerFunc[T] {
 }
 
 // produceChannel returns a producer that produces the elements received through the given channels, in order.
-// The returned signal channel will be closed once the new producer is finished.
-// The new producer must not be called more than once, doing so will panic.
+// It closes the returned signal channel once the new producer is finished.
+// Calling the new producer more than once will panic.
 func produceChannel[T any](channels ...<-chan T) (ProducerFunc[T], <-chan struct{}) {
 	finished := make(chan struct{})
 
@@ -75,8 +75,8 @@ func produceChannel[T any](channels ...<-chan T) (ProducerFunc[T], <-chan struct
 	}, finished
 }
 
-// ProduceChannelConcurrent returns a producer that produces the elements received through the given channels, in undefined order.
-// The channels are consumed concurrently.
+// ProduceChannelConcurrent returns a producer that produces the elements received through the given channels,
+// in undefined order. It consumes the channels concurrently.
 func ProduceChannelConcurrent[T any](channels ...<-chan T) ProducerFunc[T] {
 	return func(ctx context.Context, _ context.CancelCauseFunc) <-chan T {
 		outCh := make(chan T)
@@ -110,8 +110,7 @@ func ProduceChannelConcurrent[T any](channels ...<-chan T) ProducerFunc[T] {
 }
 
 // Split returns producers that produce the elements produced by prod, in undefined order.
-// prod is consumed concurrently by the new producers.
-// The new producers are not guaranteed to consume elements evenly.
+// The new producers consume prod concurrently.
 func Split[T any](ctx context.Context, prod ProducerFunc[T]) (ProducerFunc[T], ProducerFunc[T], context.Context) {
 	outCh1 := make(chan T)
 	outCh2 := make(chan T)
@@ -158,7 +157,7 @@ func Join[T any](producers ...ProducerFunc[T]) ProducerFunc[T] {
 }
 
 // JoinConcurrent returns a producer that produces the elements produced by the given producers, in undefined order.
-// The producers are consumed concurrently.
+// It consumes the producers concurrently.
 func JoinConcurrent[T any](producers ...ProducerFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
 		channels := make([]<-chan T, len(producers))

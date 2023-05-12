@@ -11,7 +11,7 @@ import "github.com/blizzy78/gostreams"
 ```
 
 
-Code Example
+Code example
 ------------
 
 ```go
