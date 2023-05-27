@@ -27,6 +27,11 @@ func Reduce[T any, A any](ctx context.Context, prod ProducerFunc[T], acc A, redu
 	return acc, err
 }
 
+// ReduceSlice returns a slice of all elements produced by prod.
+func ReduceSlice[T any](ctx context.Context, prod ProducerFunc[T]) ([]T, error) {
+	return Reduce(ctx, prod, nil, CollectSlice[T]())
+}
+
 // Each calls each for each element produced by prod.
 // If prod or each cancel the stream's context, it returns the cause of the cancellation.
 func Each[T any](ctx context.Context, prod ProducerFunc[T], each ConsumerFunc[T]) error {

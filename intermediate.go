@@ -22,6 +22,9 @@ type PredicateFunc[T any] func(ctx context.Context, cancel context.CancelCauseFu
 // LessFunc returns true if element a is "less" than element b.
 type LessFunc[T any] func(ctx context.Context, cancel context.CancelCauseFunc, a T, b T) bool
 
+// SeenFunc is a function that returns true if elem has been seen before.
+type SeenFunc[T any] func(elem T) bool
+
 // ErrLimitReached is the error used to short-circuit a stream by canceling its context to indicate that
 // the maximum number of elements given to Limit has been reached.
 var ErrLimitReached = errors.New("limit reached")
@@ -410,6 +413,49 @@ func Sort[T any](prod ProducerFunc[T], sort LessFunc[T]) ProducerFunc[T] {
 		}()
 
 		return outCh
+	}
+}
+
+// Distinct returns a producer that produces those elements produced by prod which are distinct.
+func Distinct[T comparable](prod ProducerFunc[T]) ProducerFunc[T] {
+	return DistinctSeen(prod, seenMap[T]())
+}
+
+// DistinctSeen returns a producer that produces those elements produced by prod for which seen returns false.
+func DistinctSeen[T any](prod ProducerFunc[T], seen SeenFunc[T]) ProducerFunc[T] {
+	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
+		ch := prod(ctx, cancel)
+
+		outCh := make(chan T)
+
+		go func() {
+			defer close(outCh)
+
+			for elem := range ch {
+				if seen(elem) {
+					continue
+				}
+
+				outCh <- elem
+			}
+		}()
+
+		return outCh
+	}
+}
+
+// seenMap returns a SeenFunc that uses a map to keep track of seen elements.
+func seenMap[T comparable]() SeenFunc[T] {
+	seen := map[T]struct{}{}
+
+	return func(elem T) bool {
+		if _, ok := seen[elem]; ok {
+			return true
+		}
+
+		seen[elem] = struct{}{}
+
+		return false
 	}
 }
 

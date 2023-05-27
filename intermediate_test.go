@@ -23,7 +23,7 @@ func TestMap(t *testing.T) {
 		return elem * 2
 	})
 
-	result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, _ := ReduceSlice(ctx, ints)
 
 	is.Equal(result, []int{2, 4, 6, 8, 10})
 }
@@ -47,7 +47,7 @@ func TestMap_Cancel(t *testing.T) {
 		return elem * 2
 	})
 
-	result, err := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, err := ReduceSlice(ctx, ints)
 
 	is.Equal(result, []int{2, 4})
 	is.True(errors.Is(err, context.Canceled))
@@ -66,7 +66,7 @@ func TestMapConcurrent(t *testing.T) {
 		return elem * 2
 	})
 
-	result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, _ := ReduceSlice(ctx, ints)
 
 	slices.Sort(result)
 
@@ -82,7 +82,7 @@ func TestFilter(t *testing.T) {
 
 	ints = Filter(ints, even)
 
-	result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, _ := ReduceSlice(ctx, ints)
 
 	is.Equal(result, []int{2, 4})
 }
@@ -108,7 +108,7 @@ func TestFilter_Cancel(t *testing.T) {
 
 	ints = Filter(ints, evenCancel)
 
-	result, err := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, err := ReduceSlice(ctx, ints)
 
 	is.Equal(result, []int{2})
 	is.True(errors.Is(err, context.Canceled))
@@ -127,7 +127,7 @@ func TestFilterConcurrent(t *testing.T) {
 		return elem%2 == 0
 	})
 
-	result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, _ := ReduceSlice(ctx, ints)
 
 	slices.Sort(result)
 
@@ -149,7 +149,7 @@ func TestPeek(t *testing.T) {
 		sum += elem
 	})
 
-	_, _ = Reduce(ctx, ints, nil, CollectSlice[int]())
+	_, _ = ReduceSlice(ctx, ints)
 
 	is.Equal(sum, 15)
 }
@@ -175,7 +175,7 @@ func TestPeek_Cancel(t *testing.T) {
 		sum += elem
 	})
 
-	_, err := Reduce(ctx, ints, nil, CollectSlice[int]())
+	_, err := ReduceSlice(ctx, ints)
 
 	is.Equal(sum, 3)
 	is.True(errors.Is(err, context.Canceled))
@@ -192,7 +192,7 @@ func TestSort(t *testing.T) {
 		return a < b
 	})
 
-	result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, _ := ReduceSlice(ctx, ints)
 
 	is.Equal(result, []int{1, 2, 3, 4, 5})
 }
@@ -213,7 +213,7 @@ func TestSort_Cancel(t *testing.T) {
 		return a < b
 	})
 
-	_, err := Reduce(ctx, ints, nil, CollectSlice[int]())
+	_, err := ReduceSlice(ctx, ints)
 
 	is.True(errors.Is(err, context.Canceled))
 }
@@ -290,7 +290,7 @@ func TestLimit(t *testing.T) { //nolint:gocognit // it's a bit more involved
 				return Produce(elems)
 			})
 
-			result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
+			result, _ := ReduceSlice(ctx, ints)
 
 			is.Equal(result, test.want)
 			is.Equal(<-producerCancelCause, test.wantProducerCancelCause)
@@ -307,7 +307,7 @@ func TestSkip(t *testing.T) {
 
 	ints = Skip(ints, 3)
 
-	result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, _ := ReduceSlice(ctx, ints)
 
 	is.Equal(result, []int{4, 5})
 }
@@ -330,7 +330,7 @@ func TestFlatMap(t *testing.T) {
 		return Produce(elems)
 	})
 
-	result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, _ := ReduceSlice(ctx, ints)
 
 	is.Equal(result, []int{1, 1, 2, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5})
 }
@@ -353,9 +353,23 @@ func TestFlatMapConcurrent(t *testing.T) {
 		return Produce(elems)
 	})
 
-	result, _ := Reduce(ctx, ints, nil, CollectSlice[int]())
+	result, _ := ReduceSlice(ctx, ints)
 
 	slices.Sort(result)
 
 	is.Equal(result, []int{1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, 5})
+}
+
+func TestDistinct(t *testing.T) {
+	is := is.New(t)
+
+	ctx := context.Background()
+
+	ints := Produce([]int{1, 2, 1, 3, 2, 4, 3, 5})
+
+	ints = Distinct(ints)
+
+	result, _ := ReduceSlice(ctx, ints)
+
+	is.Equal(result, []int{1, 2, 3, 4, 5})
 }

@@ -75,6 +75,22 @@ func TestReduce_CollectMapNoDuplicateKeys(t *testing.T) {
 	is.Equal(cause.Key, "3")
 }
 
+func TestReduceSlice(t *testing.T) {
+	is := is.New(t)
+
+	ctx := context.Background()
+
+	ints := Produce([]int{1, 2, 3, 4, 5})
+
+	ints = Map(ints, FuncMapper(func(elem int) int {
+		return elem * 2
+	}))
+
+	result, _ := ReduceSlice(ctx, ints)
+
+	is.Equal(result, []int{2, 4, 6, 8, 10})
+}
+
 func TestEach(t *testing.T) {
 	is := is.New(t)
 

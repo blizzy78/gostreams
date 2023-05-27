@@ -20,8 +20,7 @@ func Example() {
 	intStrs := Map(ints, FuncMapper(strconv.Itoa))
 
 	// perform a reduction to collect the strings into a slice
-	// since append can work with nil, we can simply pass nil as the initial accumulator
-	strs, _ := Reduce(context.Background(), intStrs, nil, CollectSlice[string]())
+	strs, _ := ReduceSlice(context.Background(), intStrs)
 
 	fmt.Printf("%+v\n", strs)
 	// Output: [2 4 6 8 10]
