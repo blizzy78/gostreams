@@ -39,8 +39,6 @@ func FuncMapper[T any, U any](mapp Function[T, U]) MapperFunc[T, U] {
 // Map returns a producer that calls mapp for each element produced by prod, mapping it to type U.
 func Map[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
-		ch := prod(ctx, cancel)
-
 		outCh := make(chan U)
 
 		go func() {
@@ -48,7 +46,7 @@ func Map[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) ProducerFunc
 
 			index := uint64(0)
 
-			for elem := range ch {
+			for elem := range prod(ctx, cancel) {
 				outElem := mapp(ctx, cancel, elem, index)
 
 				if contextDone(ctx) {
@@ -73,15 +71,13 @@ func Map[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) ProducerFunc
 // mapping it to type U. It produces elements in undefined order.
 func MapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
-		ch := prod(ctx, cancel)
-
 		outCh := make(chan U)
 
 		index := uint64(0)
 
 		grp := sync.WaitGroup{}
 
-		for elem := range ch {
+		for elem := range prod(ctx, cancel) {
 			grp.Add(1)
 
 			go func(elem T, index uint64) {
@@ -117,27 +113,22 @@ func MapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) Pr
 // that produces elements of type U. The new producer produces all elements produced by the intermediate producers, in order.
 func FlatMap[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc[U]]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
-		ch := prod(ctx, cancel)
-
+		prods := []ProducerFunc[U]{}
 		index := uint64(0)
 
-		prods := []ProducerFunc[U]{}
-
-		for elem := range ch {
+		for elem := range prod(ctx, cancel) {
 			prods = append(prods, mapp(ctx, cancel, elem, index))
 			index++
 		}
 
 		prod := Join(prods...)
 
-		prodCh := prod(ctx, cancel)
-
 		outCh := make(chan U)
 
 		go func() {
 			defer close(outCh)
 
-			for elem := range prodCh {
+			for elem := range prod(ctx, cancel) {
 				select {
 				case outCh <- elem:
 
@@ -155,27 +146,22 @@ func FlatMap[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc
 // that produces elements of type U. The new producer produces all elements produced by the intermediate producers, in undefined order.
 func FlatMapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc[U]]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
-		ch := prod(ctx, cancel)
-
+		prods := []ProducerFunc[U]{}
 		index := uint64(0)
 
-		prods := []ProducerFunc[U]{}
-
-		for elem := range ch {
+		for elem := range prod(ctx, cancel) {
 			prods = append(prods, mapp(ctx, cancel, elem, index))
 			index++
 		}
 
 		prod := JoinConcurrent(prods...)
 
-		prodCh := prod(ctx, cancel)
-
 		outCh := make(chan U)
 
 		go func() {
 			defer close(outCh)
 
-			for elem := range prodCh {
+			for elem := range prod(ctx, cancel) {
 				select {
 				case outCh <- elem:
 
@@ -193,16 +179,13 @@ func FlatMapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, Pr
 // filter returns true.
 func Filter[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
-		ch := prod(ctx, cancel)
-
 		outCh := make(chan T)
 
 		go func() {
 			defer close(outCh)
 
 			index := uint64(0)
-
-			for elem := range ch {
+			for elem := range prod(ctx, cancel) {
 				filterResult := filter(ctx, cancel, elem, index)
 
 				if contextDone(ctx) {
@@ -232,15 +215,13 @@ func Filter[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T
 // filter returns true. It produces elements in undefined order.
 func FilterConcurrent[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
-		ch := prod(ctx, cancel)
-
 		outCh := make(chan T)
 
 		index := uint64(0)
 
 		grp := sync.WaitGroup{}
 
-		for elem := range ch {
+		for elem := range prod(ctx, cancel) {
 			grp.Add(1)
 
 			go func(elem T, index uint64) {
@@ -279,16 +260,13 @@ func FilterConcurrent[T any](prod ProducerFunc[T], filter PredicateFunc[T]) Prod
 // Peek returns a producer that calls peek for each element produced by prod, in order, and produces the same elements.
 func Peek[T any](prod ProducerFunc[T], peek ConsumerFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
-		ch := prod(ctx, cancel)
-
 		outCh := make(chan T)
 
 		go func() {
 			defer close(outCh)
 
 			index := uint64(0)
-
-			for elem := range ch {
+			for elem := range prod(ctx, cancel) {
 				peek(ctx, cancel, elem, index)
 
 				if contextDone(ctx) {
@@ -314,16 +292,15 @@ func Peek[T any](prod ProducerFunc[T], peek ConsumerFunc[T]) ProducerFunc[T] {
 // entire stream's context).
 func Limit[T any](prod ProducerFunc[T], max uint64) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
-		prodCtx, cancelProd := context.WithCancelCause(ctx)
-
-		ch := prod(prodCtx, cancel)
-
 		outCh := make(chan T)
 
 		go func() {
+			defer close(outCh)
+
+			prodCtx, cancelProd := context.WithCancelCause(ctx)
 			defer cancelProd(nil)
 
-			defer close(outCh)
+			ch := prod(prodCtx, cancel)
 
 			if max == 0 {
 				cancelProd(ErrLimitReached)
@@ -354,16 +331,13 @@ func Limit[T any](prod ProducerFunc[T], max uint64) ProducerFunc[T] {
 // Skip returns a producer that produces the same elements as prod, in order, skipping the first num elements.
 func Skip[T any](prod ProducerFunc[T], num uint64) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
-		ch := prod(ctx, cancel)
-
 		outCh := make(chan T)
 
 		go func() {
 			defer close(outCh)
 
 			done := uint64(0)
-
-			for elem := range ch {
+			for elem := range prod(ctx, cancel) {
 				done++
 				if done <= num {
 					continue
@@ -385,11 +359,8 @@ func Skip[T any](prod ProducerFunc[T], num uint64) ProducerFunc[T] {
 // Sort returns a producer that consumes elements from prod, sorts them using sort, and produces them in sorted order.
 func Sort[T any](prod ProducerFunc[T], sort LessFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
-		ch := prod(ctx, cancel)
-
 		result := []T{}
-
-		for elem := range ch {
+		for elem := range prod(ctx, cancel) {
 			result = append(result, elem)
 		}
 
@@ -424,19 +395,22 @@ func Distinct[T comparable](prod ProducerFunc[T]) ProducerFunc[T] {
 // DistinctSeen returns a producer that produces those elements produced by prod for which seen returns false.
 func DistinctSeen[T any](prod ProducerFunc[T], seen SeenFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
-		ch := prod(ctx, cancel)
-
 		outCh := make(chan T)
 
 		go func() {
 			defer close(outCh)
 
-			for elem := range ch {
+			for elem := range prod(ctx, cancel) {
 				if seen(elem) {
 					continue
 				}
 
-				outCh <- elem
+				select {
+				case outCh <- elem:
+
+				case <-ctx.Done():
+					return
+				}
 			}
 		}()
 
