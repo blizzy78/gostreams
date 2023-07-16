@@ -87,6 +87,7 @@ linters-settings:
       - ch <-chan T
       - ch chan int
       - ch chan struct{}
+      - ch chan byte
   wrapcheck:
     ignoreSigs:
       - .Errorf(
