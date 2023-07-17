@@ -42,39 +42,27 @@ const (
 )
 
 const (
-	orderLikeUpstream = order(iota)
-	orderUnstable
-	orderStable
-)
+	orderUnstableFlag = flag(1 << iota)
+	orderStableFlag
 
-const (
-	multipleLikeUpstream = multiple(iota)
-	multipleNo
-	multipleYes
-)
+	multipleNoFlag
+	multipleYesFlag
 
-const (
-	joinLikeUpstream = join(iota)
-	joinAny
-	joinConcurrent
+	joinAnyFlag
+	joinConcurrentFlag
+
+	memoryIntensiveFlag
 )
 
 type fuzzProducer struct {
-	describe        func() string
-	upstream        *fuzzProducer
-	order           order
-	multiple        multiple
-	join            join
-	memoryIntensive bool
-	create          func(context.Context) []ProducerFunc[byte]
-	expected        []byte
+	describe func() string
+	upstream *fuzzProducer
+	flags    flag
+	create   func(context.Context) []ProducerFunc[byte]
+	expected []byte
 }
 
-type order int
-
-type multiple int
-
-type join int
+type flag uint8
 
 type unexpectedResultError struct {
 	actual   []byte
@@ -245,9 +233,7 @@ func readProducerSlice(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (
 			return fmt.Sprintf("produceSlice(%d slices)", len(slices))
 		},
 
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce(slices...)}
@@ -279,9 +265,7 @@ func readProducerChannel(t *testing.T, fuzzInput []byte, upstream *fuzzProducer)
 			return fmt.Sprintf("produceChannel(%d slices)", len(slices))
 		},
 
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			channels := make([]<-chan byte, len(slices))
@@ -329,9 +313,7 @@ func readProducerChannelConcurrent(t *testing.T, fuzzInput []byte, upstream *fuz
 			return fmt.Sprintf("produceChannelConcurrent(%d slices)", len(slices))
 		},
 
-		order:    orderUnstable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderUnstableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			channels := make([]<-chan byte, len(slices))
@@ -458,9 +440,9 @@ func readProducerSort(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*
 	copy(expected, upstream.expected)
 	slices.Sort(expected)
 
-	order := orderStable
+	flags := orderStableFlag
 	if upstream.multipleYes() {
-		order = orderLikeUpstream
+		flags ^= orderStableFlag
 	}
 
 	return &fuzzProducer{
@@ -469,7 +451,7 @@ func readProducerSort(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*
 		},
 
 		upstream: upstream,
-		order:    order,
+		flags:    flags,
 
 		create: func(ctx context.Context) []ProducerFunc[byte] {
 			less := func(_ context.Context, _ context.CancelCauseFunc, a byte, b byte) bool {
@@ -546,7 +528,7 @@ func readProducerMapConcurrent(t *testing.T, fuzzInput []byte, upstream *fuzzPro
 		},
 
 		upstream: upstream,
-		order:    orderUnstable,
+		flags:    orderUnstableFlag,
 
 		create: func(ctx context.Context) []ProducerFunc[byte] {
 			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) byte {
@@ -580,8 +562,7 @@ func readProducerSplit(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (
 		},
 
 		upstream: upstream,
-		order:    orderUnstable,
-		multiple: multipleYes,
+		flags:    orderUnstableFlag | multipleYesFlag,
 
 		create: func(ctx context.Context) []ProducerFunc[byte] {
 			upstreams := upstream.create(ctx)
@@ -617,8 +598,7 @@ func readProducerJoin(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*
 		},
 
 		upstream: upstream,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags:    multipleNoFlag | joinAnyFlag,
 
 		create: func(ctx context.Context) []ProducerFunc[byte] {
 			prods := upstream.create(ctx)
@@ -642,9 +622,7 @@ func readProducerJoinConcurrent(t *testing.T, fuzzInput []byte, upstream *fuzzPr
 		},
 
 		upstream: upstream,
-		order:    orderUnstable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags:    orderUnstableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(ctx context.Context) []ProducerFunc[byte] {
 			prods := upstream.create(ctx)
@@ -670,11 +648,8 @@ func readProducerTee(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*f
 			return upstream.describe() + " -> tee"
 		},
 
-		upstream:        upstream,
-		order:           orderUnstable,
-		multiple:        multipleYes,
-		join:            joinConcurrent,
-		memoryIntensive: true,
+		upstream: upstream,
+		flags:    orderUnstableFlag | multipleYesFlag | joinConcurrentFlag | memoryIntensiveFlag,
 
 		create: func(ctx context.Context) []ProducerFunc[byte] {
 			upstreams := upstream.create(ctx)
@@ -757,7 +732,7 @@ func readProducerFilterConcurrent(t *testing.T, fuzzInput []byte, upstream *fuzz
 		},
 
 		upstream: upstream,
-		order:    orderUnstable,
+		flags:    orderUnstableFlag,
 
 		create: func(ctx context.Context) []ProducerFunc[byte] {
 			even := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) bool {
@@ -840,8 +815,8 @@ func readProducerFlatMap(t *testing.T, fuzzInput []byte, upstream *fuzzProducer)
 			return upstream.describe() + " -> flatMap"
 		},
 
-		upstream:        upstream,
-		memoryIntensive: true,
+		upstream: upstream,
+		flags:    memoryIntensiveFlag,
 
 		create: func(ctx context.Context) []ProducerFunc[byte] {
 			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) ProducerFunc[byte] {
@@ -880,9 +855,8 @@ func readProducerFlatMapConcurrent(t *testing.T, fuzzInput []byte, upstream *fuz
 			return upstream.describe() + " -> flatMap"
 		},
 
-		upstream:        upstream,
-		order:           orderUnstable,
-		memoryIntensive: true,
+		upstream: upstream,
+		flags:    orderUnstableFlag | memoryIntensiveFlag,
 
 		create: func(ctx context.Context) []ProducerFunc[byte] {
 			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) ProducerFunc[byte] {
@@ -1024,11 +998,12 @@ func equalSlices[T comparable](t *testing.T, first []T, second []T) bool {
 
 func (p *fuzzProducer) stableOrder() bool {
 	for p := p; p != nil; p = p.upstream {
-		switch p.order {
-		case orderUnstable:
-			return false
-		case orderStable:
+		if p.flags&orderStableFlag != 0 {
 			return true
+		}
+
+		if p.flags&orderUnstableFlag != 0 {
+			return false
 		}
 	}
 
@@ -1037,11 +1012,12 @@ func (p *fuzzProducer) stableOrder() bool {
 
 func (p *fuzzProducer) multipleYes() bool {
 	for p := p; p != nil; p = p.upstream {
-		switch p.multiple {
-		case multipleNo:
-			return false
-		case multipleYes:
+		if p.flags&multipleYesFlag != 0 {
 			return true
+		}
+
+		if p.flags&multipleNoFlag != 0 {
+			return false
 		}
 	}
 
@@ -1050,11 +1026,12 @@ func (p *fuzzProducer) multipleYes() bool {
 
 func (p *fuzzProducer) joinConcurrent() bool {
 	for p := p; p != nil; p = p.upstream {
-		switch p.join {
-		case joinAny:
-			return false
-		case joinConcurrent:
+		if p.flags&joinConcurrentFlag != 0 {
 			return true
+		}
+
+		if p.flags&joinAnyFlag != 0 {
+			return false
 		}
 	}
 
@@ -1074,7 +1051,7 @@ func (p *fuzzProducer) memoryIntensives() int {
 	num := 0
 
 	for p := p; p != nil; p = p.upstream {
-		if !p.memoryIntensive {
+		if p.flags&memoryIntensiveFlag == 0 {
 			continue
 		}
 

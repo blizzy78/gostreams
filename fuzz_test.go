@@ -18,7 +18,6 @@ func TestReadProducerSlice(t *testing.T) {
 	}
 
 	fuzzProd, fuzzInput, ok := readProducerSlice(t, fuzzInput, nil)
-	is.Equal(fuzzProd.order, orderStable)
 	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
 	is.Equal(fuzzInput, []byte{})
 	is.True(ok)
@@ -39,7 +38,6 @@ func TestReadProducerChannel(t *testing.T) {
 	}
 
 	fuzzProd, fuzzInput, ok := readProducerChannel(t, fuzzInput, nil)
-	is.Equal(fuzzProd.order, orderStable)
 	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
 	is.Equal(fuzzInput, []byte{})
 	is.True(ok)
@@ -60,7 +58,6 @@ func TestReadProducerChannelConcurrent(t *testing.T) {
 	}
 
 	fuzzProd, fuzzInput, ok := readProducerChannelConcurrent(t, fuzzInput, nil)
-	is.Equal(fuzzProd.order, orderUnstable)
 	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
 	is.Equal(fuzzInput, []byte{})
 	is.True(ok)
@@ -77,9 +74,7 @@ func TestReadProducerLimit(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5})}
@@ -106,9 +101,7 @@ func TestReadProducerLimit_UpstreamIsShorter(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 2})}
@@ -135,9 +128,7 @@ func TestReadProducerSkip(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5})}
@@ -164,9 +155,7 @@ func TestReadProducerSkip_UpstreamIsShorter(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 2})}
@@ -193,9 +182,7 @@ func TestReadProducerSort(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{3, 1, 5, 2, 4})}
@@ -207,7 +194,6 @@ func TestReadProducerSort(t *testing.T) {
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, ok := readProducerSort(t, fuzzInput, &upstream)
-	is.Equal(fuzzProd.order, orderStable)
 	is.Equal(fuzzProd.upstream, &upstream)
 	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5})
 	is.Equal(fuzzInput, []byte{})
@@ -223,9 +209,7 @@ func TestReadProducerMap(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{10, 20, 30, 40, 50})}
@@ -252,9 +236,7 @@ func TestReadProducerMapConcurrent(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{10, 20, 30, 40, 50})}
@@ -282,9 +264,7 @@ func TestReadProducerSplit(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5})}
@@ -296,8 +276,6 @@ func TestReadProducerSplit(t *testing.T) {
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, ok := readProducerSplit(t, fuzzInput, &upstream)
-	is.Equal(fuzzProd.order, orderUnstable)
-	is.Equal(fuzzProd.multiple, multipleYes)
 	is.Equal(fuzzProd.upstream, &upstream)
 	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5})
 	is.Equal(fuzzInput, []byte{})
@@ -315,9 +293,7 @@ func TestReadProducerJoin(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleYes,
-		join:     joinAny,
+		flags: orderStableFlag | multipleYesFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{
@@ -347,9 +323,7 @@ func TestReadProducerJoinConcurrent(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleYes,
-		join:     joinAny,
+		flags: orderStableFlag | multipleYesFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{
@@ -364,7 +338,6 @@ func TestReadProducerJoinConcurrent(t *testing.T) {
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, ok := readProducerJoinConcurrent(t, fuzzInput, &upstream)
-	is.Equal(fuzzProd.order, orderUnstable)
 	is.Equal(fuzzProd.upstream, &upstream)
 	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	is.Equal(fuzzInput, []byte{})
@@ -382,9 +355,7 @@ func TestReadProducerTee(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5})}
@@ -396,8 +367,6 @@ func TestReadProducerTee(t *testing.T) {
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, ok := readProducerTee(t, fuzzInput, &upstream)
-	is.Equal(fuzzProd.order, orderUnstable)
-	is.Equal(fuzzProd.multiple, multipleYes)
 	is.Equal(fuzzProd.upstream, &upstream)
 	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 1, 2, 3, 4, 5})
 	is.Equal(fuzzInput, []byte{})
@@ -415,9 +384,7 @@ func TestReadProducerFilter(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5})}
@@ -444,9 +411,7 @@ func TestReadProducerFilterConcurrent(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5})}
@@ -474,9 +439,7 @@ func TestReadProducerDistinct(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 3, 2, 4, 1, 3, 4, 3, 2, 5, 5})}
@@ -503,9 +466,7 @@ func TestReadProducerFlatMap(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{10, 20, 30, 40, 50})}
@@ -532,9 +493,7 @@ func TestReadProducerFlatMapConcurrent(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{10, 20, 30, 40, 50})}
@@ -562,9 +521,7 @@ func TestReadProducerPeek(t *testing.T) {
 	is := is.New(t)
 
 	upstream := fuzzProducer{
-		order:    orderStable,
-		multiple: multipleNo,
-		join:     joinAny,
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
 
 		create: func(_ context.Context) []ProducerFunc[byte] {
 			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5})}
