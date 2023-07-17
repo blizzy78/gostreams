@@ -38,6 +38,7 @@ const (
 	DistinctProducerType
 	FlatMapProducerType
 	FlatMapConcurrentProducerType
+	PeekProducerType
 )
 
 const (
@@ -98,6 +99,7 @@ var producerTypeToFunc = map[byte]func(*testing.T, []byte, *fuzzProducer) (*fuzz
 	DistinctProducerType:          readProducerDistinct,
 	FlatMapProducerType:           readProducerFlatMap,
 	FlatMapConcurrentProducerType: readProducerFlatMapConcurrent,
+	PeekProducerType:              readProducerPeek,
 }
 
 func FuzzAll(f *testing.F) {
@@ -898,6 +900,35 @@ func readProducerFlatMapConcurrent(t *testing.T, fuzzInput []byte, upstream *fuz
 		},
 
 		expected: expected,
+	}, fuzzInput, true
+}
+
+func readProducerPeek(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> peek"
+		},
+
+		upstream: upstream,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = Peek(u, func(_ context.Context, _ context.CancelCauseFunc, _ byte, _ uint64) {})
+			}
+
+			return prods
+		},
+
+		expected: upstream.expected,
 	}, fuzzInput, true
 }
 

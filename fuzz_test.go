@@ -558,6 +558,35 @@ func TestReadProducerFlatMapConcurrent(t *testing.T) {
 	is.Equal(elems, []byte{2, 5, 7, 10, 10, 12, 20, 30, 40, 50})
 }
 
+func TestReadProducerPeek(t *testing.T) {
+	is := is.New(t)
+
+	upstream := fuzzProducer{
+		order:    orderStable,
+		multiple: multipleNo,
+		join:     joinAny,
+
+		create: func(_ context.Context) []ProducerFunc[byte] {
+			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5})}
+		},
+
+		expected: []byte{1, 2, 3, 4, 5},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzProd, fuzzInput, ok := readProducerPeek(t, fuzzInput, &upstream)
+	is.Equal(fuzzProd.upstream, &upstream)
+	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5})
+	is.Equal(fuzzInput, []byte{})
+	is.True(ok)
+
+	ctx := context.Background()
+	prods := fuzzProd.create(ctx)
+	elems, _ := ReduceSlice(ctx, prods[0])
+	is.Equal(elems, []byte{1, 2, 3, 4, 5})
+}
+
 func TestReadSlices(t *testing.T) {
 	is := is.New(t)
 
