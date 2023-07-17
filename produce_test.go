@@ -114,7 +114,7 @@ func TestSplit(t *testing.T) {
 
 	ints := Produce([]int{1, 2, 3, 4, 5})
 
-	ints1, ints2, ctx := Split(ctx, ints)
+	ints1, ints2 := Split(ctx, ints)
 
 	result := []int{}
 
@@ -156,7 +156,7 @@ func TestTee(t *testing.T) {
 
 	ints := Produce([]int{1, 2, 3, 4, 5})
 
-	ints1, ints2, ctx := Tee(ctx, ints)
+	ints1, ints2 := Tee(ctx, ints)
 
 	result1 := []int{}
 	result2 := []int{}

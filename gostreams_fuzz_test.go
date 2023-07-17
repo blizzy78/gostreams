@@ -1,75 +1,168 @@
 package gostreams
 
+// nice -n 19 go test '-run=^$' -fuzz=FuzzAll -cover
+
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
+	"time"
 
-	"github.com/matryer/is"
 	"golang.org/x/exp/slices"
+)
+
+// reduce these to lower memory usage
+const (
+	maxPipelineLength   = 20
+	maxSlices           = 5
+	maxSliceLength      = 10
+	maxMemoryIntensives = 2
 )
 
 const (
 	SliceProducerType = byte(iota + 1)
 	ChannelProducerType
 	ChannelConcurrentProducerType
-
 	LimitProducerType
 	SkipProducerType
 	SortProducerType
 	MapProducerType
+	MapConcurrentProducerType
+	SplitProducerType
+	JoinProducerType
+	JoinConcurrentProducerType
+	TeeProducerType
+	FilterProducerType
+	FilterConcurrentProducerType
+	DistinctProducerType
+	FlatMapProducerType
+	FlatMapConcurrentProducerType
 )
 
 const (
-	OrderLikeParent = order(iota)
-	OrderUnstable
-	OrderStable
+	orderLikeUpstream = order(iota)
+	orderUnstable
+	orderStable
 )
 
-const maxChainLength = 20
+const (
+	multipleLikeUpstream = multiple(iota)
+	multipleNo
+	multipleYes
+)
+
+const (
+	joinLikeUpstream = join(iota)
+	joinAny
+	joinConcurrent
+)
 
 type fuzzProducer struct {
-	upstream *fuzzProducer
-	order    order
-	create   func() ProducerFunc[byte]
-	expected []byte
+	describe        func() string
+	upstream        *fuzzProducer
+	order           order
+	multiple        multiple
+	join            join
+	memoryIntensive bool
+	create          func(context.Context) []ProducerFunc[byte]
+	expected        []byte
 }
 
 type order int
 
+type multiple int
+
+type join int
+
+type unexpectedResultError struct {
+	actual   []byte
+	expected []byte
+}
+
+var producerTypeToFunc = map[byte]func(*testing.T, []byte, *fuzzProducer) (*fuzzProducer, []byte, bool){
+	SliceProducerType:             readProducerSlice,
+	ChannelProducerType:           readProducerChannel,
+	ChannelConcurrentProducerType: readProducerChannelConcurrent,
+	LimitProducerType:             readProducerLimit,
+	SkipProducerType:              readProducerSkip,
+	SortProducerType:              readProducerSort,
+	MapProducerType:               readProducerMap,
+	MapConcurrentProducerType:     readProducerMapConcurrent,
+	SplitProducerType:             readProducerSplit,
+	JoinProducerType:              readProducerJoin,
+	JoinConcurrentProducerType:    readProducerJoinConcurrent,
+	TeeProducerType:               readProducerTee,
+	FilterProducerType:            readProducerFilter,
+	FilterConcurrentProducerType:  readProducerFilterConcurrent,
+	DistinctProducerType:          readProducerDistinct,
+	FlatMapProducerType:           readProducerFlatMap,
+	FlatMapConcurrentProducerType: readProducerFlatMapConcurrent,
+}
+
 func FuzzAll(f *testing.F) {
 	f.Fuzz(func(t *testing.T, fuzzInput []byte) {
-		fuzzProd, _, ok := readProducer(t, fuzzInput)
+		tmp := make([]byte, len(fuzzInput))
+		copy(tmp, fuzzInput)
+		fuzzInput = tmp
+
+		origFuzzInput := fuzzInput
+
+		fuzzProd, fuzzInput, ok := readProducer(t, fuzzInput)
 		if !ok {
+			t.SkipNow()
 			return
 		}
 
-		length := 0
-		for fp := fuzzProd; fp != nil; fp = fp.upstream {
-			length++
-		}
-
-		if length > maxChainLength {
+		// reject extra input
+		if len(fuzzInput) != 0 {
+			t.SkipNow()
 			return
 		}
 
-		is := is.New(t)
+		ctx := context.Background()
 
-		prod := fuzzProd.create()
+		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
 
-		elems, err := ReduceSlice(context.Background(), prod)
-		expected := fuzzProd.expected
+		if err := testProducer(ctx, t, fuzzProd); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				t.Logf("%+v: %s: took too long", origFuzzInput, fuzzProd.describe())
+				t.SkipNow()
+				return
+			}
 
-		if !fuzzProd.stableOrder() {
-			slices.Sort(elems)
-
-			expected = make([]byte, len(fuzzProd.expected))
-			copy(expected, fuzzProd.expected)
-			slices.Sort(expected)
+			t.Fatalf("%+v: %s: %s", origFuzzInput, fuzzProd.describe(), err.Error())
 		}
-
-		isEqualSlices(t, is, elems, expected)
-		is.NoErr(err)
 	})
+}
+
+func testProducer(ctx context.Context, t *testing.T, fuzzProd *fuzzProducer) error { //nolint:thelper // not a helper function
+	prod := fuzzProd.create(ctx)[0]
+
+	elems, err := ReduceSlice(ctx, prod)
+	if err != nil {
+		return err
+	}
+
+	expected := fuzzProd.expected
+
+	if !fuzzProd.stableOrder() {
+		slices.Sort(elems)
+
+		expected = make([]byte, len(fuzzProd.expected))
+		copy(expected, fuzzProd.expected)
+		slices.Sort(expected)
+	}
+
+	if !equalSlices(t, elems, expected) {
+		return &unexpectedResultError{
+			actual:   elems,
+			expected: expected,
+		}
+	}
+
+	return nil
 }
 
 func readProducer(t *testing.T, fuzzInput []byte) (*fuzzProducer, []byte, bool) {
@@ -86,14 +179,28 @@ func readProducer(t *testing.T, fuzzInput []byte) (*fuzzProducer, []byte, bool) 
 	}
 
 	for {
+		if fuzzProd.length() > maxPipelineLength {
+			return nil, nil, false
+		}
+
+		if fuzzProd.memoryIntensives() > maxMemoryIntensives {
+			return nil, nil, false
+		}
+
 		newFuzzProd, newFuzzInput, ok := readProducerWithUpstream(t, fuzzInput, fuzzProd)
 		if !ok {
-			return fuzzProd, fuzzInput, true
+			break
 		}
 
 		fuzzProd = newFuzzProd
 		fuzzInput = newFuzzInput
 	}
+
+	if fuzzProd.multipleYes() {
+		return nil, nil, false
+	}
+
+	return fuzzProd, fuzzInput, true
 }
 
 func readProducerWithUpstream(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
@@ -106,31 +213,12 @@ func readProducerWithUpstream(t *testing.T, fuzzInput []byte, upstream *fuzzProd
 	typ := fuzzInput[0]
 	fuzzInput = fuzzInput[1:]
 
-	switch typ {
-	case SliceProducerType:
-		return readProducerSlice(t, fuzzInput, upstream)
-
-	case ChannelProducerType:
-		return readProducerChannel(t, fuzzInput, upstream)
-
-	case ChannelConcurrentProducerType:
-		return readProducerChannelConcurrent(t, fuzzInput, upstream)
-
-	case LimitProducerType:
-		return readProducerLimit(t, fuzzInput, upstream)
-
-	case SkipProducerType:
-		return readProducerSkip(t, fuzzInput, upstream)
-
-	case SortProducerType:
-		return readProducerSort(t, fuzzInput, upstream)
-
-	case MapProducerType:
-		return readProducerMap(t, fuzzInput, upstream)
-
-	default:
+	f, ok := producerTypeToFunc[typ]
+	if !ok {
 		return nil, nil, false
 	}
+
+	return f(t, fuzzInput, upstream)
 }
 
 func readProducerSlice(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
@@ -151,10 +239,16 @@ func readProducerSlice(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (
 	}
 
 	return &fuzzProducer{
-		order: OrderStable,
+		describe: func() string {
+			return fmt.Sprintf("produceSlice(%d slices)", len(slices))
+		},
 
-		create: func() ProducerFunc[byte] {
-			return Produce(slices...)
+		order:    orderStable,
+		multiple: multipleNo,
+		join:     joinAny,
+
+		create: func(_ context.Context) []ProducerFunc[byte] {
+			return []ProducerFunc[byte]{Produce(slices...)}
 		},
 
 		expected: expected,
@@ -179,9 +273,15 @@ func readProducerChannel(t *testing.T, fuzzInput []byte, upstream *fuzzProducer)
 	}
 
 	return &fuzzProducer{
-		order: OrderStable,
+		describe: func() string {
+			return fmt.Sprintf("produceChannel(%d slices)", len(slices))
+		},
 
-		create: func() ProducerFunc[byte] {
+		order:    orderStable,
+		multiple: multipleNo,
+		join:     joinAny,
+
+		create: func(_ context.Context) []ProducerFunc[byte] {
 			channels := make([]<-chan byte, len(slices))
 
 			for idx, slice := range slices {
@@ -198,7 +298,7 @@ func readProducerChannel(t *testing.T, fuzzInput []byte, upstream *fuzzProducer)
 				channels[idx] = ch
 			}
 
-			return ProduceChannel(channels...)
+			return []ProducerFunc[byte]{ProduceChannel(channels...)}
 		},
 
 		expected: expected,
@@ -223,9 +323,15 @@ func readProducerChannelConcurrent(t *testing.T, fuzzInput []byte, upstream *fuz
 	}
 
 	return &fuzzProducer{
-		order: OrderUnstable,
+		describe: func() string {
+			return fmt.Sprintf("produceChannelConcurrent(%d slices)", len(slices))
+		},
 
-		create: func() ProducerFunc[byte] {
+		order:    orderUnstable,
+		multiple: multipleNo,
+		join:     joinAny,
+
+		create: func(_ context.Context) []ProducerFunc[byte] {
 			channels := make([]<-chan byte, len(slices))
 
 			for idx, slice := range slices {
@@ -242,7 +348,7 @@ func readProducerChannelConcurrent(t *testing.T, fuzzInput []byte, upstream *fuz
 				channels[idx] = ch
 			}
 
-			return ProduceChannelConcurrent(channels...)
+			return []ProducerFunc[byte]{ProduceChannelConcurrent(channels...)}
 		},
 
 		expected: expected,
@@ -271,11 +377,21 @@ func readProducerLimit(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (
 	}
 
 	return &fuzzProducer{
-		order:    OrderLikeParent,
+		describe: func() string {
+			return fmt.Sprintf("%s -> limit(%d)", upstream.describe(), int(max))
+		},
+
 		upstream: upstream,
 
-		create: func() ProducerFunc[byte] {
-			return Limit(upstream.create(), uint64(max))
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = Limit(u, uint64(max))
+			}
+
+			return prods
 		},
 
 		expected: expected,
@@ -308,11 +424,21 @@ func readProducerSkip(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*
 	expected = expected[start:]
 
 	return &fuzzProducer{
-		order:    OrderLikeParent,
+		describe: func() string {
+			return fmt.Sprintf("%s -> skip(%d)", upstream.describe(), int(num))
+		},
+
 		upstream: upstream,
 
-		create: func() ProducerFunc[byte] {
-			return Skip(upstream.create(), uint64(num))
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = Skip(u, uint64(num))
+			}
+
+			return prods
 		},
 
 		expected: expected,
@@ -330,14 +456,32 @@ func readProducerSort(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*
 	copy(expected, upstream.expected)
 	slices.Sort(expected)
 
-	return &fuzzProducer{
-		order:    OrderStable,
-		upstream: upstream,
+	order := orderStable
+	if upstream.multipleYes() {
+		order = orderLikeUpstream
+	}
 
-		create: func() ProducerFunc[byte] {
-			return Sort(upstream.create(), func(_ context.Context, _ context.CancelCauseFunc, a byte, b byte) bool {
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> sort"
+		},
+
+		upstream: upstream,
+		order:    order,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			less := func(_ context.Context, _ context.CancelCauseFunc, a byte, b byte) bool {
 				return a < b
-			})
+			}
+
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = Sort(u, less)
+			}
+
+			return prods
 		},
 
 		expected: expected,
@@ -357,13 +501,400 @@ func readProducerMap(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*f
 	}
 
 	return &fuzzProducer{
-		order:    OrderLikeParent,
+		describe: func() string {
+			return upstream.describe() + " -> map"
+		},
+
 		upstream: upstream,
 
-		create: func() ProducerFunc[byte] {
-			return Map[byte, byte](upstream.create(), func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) byte {
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) byte {
 				return elem / 2
-			})
+			}
+
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = Map(u, mapp)
+			}
+
+			return prods
+		},
+
+		expected: expected,
+	}, fuzzInput, true
+}
+
+func readProducerMapConcurrent(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	expected := make([]byte, len(upstream.expected))
+	for i, b := range upstream.expected {
+		expected[i] = b / 3
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> mapConcurrent"
+		},
+
+		upstream: upstream,
+		order:    orderUnstable,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) byte {
+				return elem / 3
+			}
+
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = MapConcurrent(u, mapp)
+			}
+
+			return prods
+		},
+
+		expected: expected,
+	}, fuzzInput, true
+}
+
+func readProducerSplit(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> split"
+		},
+
+		upstream: upstream,
+		order:    orderUnstable,
+		multiple: multipleYes,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams)*2)
+			for i, u := range upstreams {
+				prod1, prod2 := Split(ctx, u)
+				prods[i*2] = prod1
+				prods[i*2+1] = prod2
+			}
+
+			return prods
+		},
+
+		expected: upstream.expected,
+	}, fuzzInput, true
+}
+
+func readProducerJoin(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	if upstream.joinConcurrent() {
+		return nil, nil, false
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> join"
+		},
+
+		upstream: upstream,
+		multiple: multipleNo,
+		join:     joinAny,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			prods := upstream.create(ctx)
+			return []ProducerFunc[byte]{Join(prods...)}
+		},
+
+		expected: upstream.expected,
+	}, fuzzInput, true
+}
+
+func readProducerJoinConcurrent(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> joinConcurrent"
+		},
+
+		upstream: upstream,
+		order:    orderUnstable,
+		multiple: multipleNo,
+		join:     joinAny,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			prods := upstream.create(ctx)
+			return []ProducerFunc[byte]{JoinConcurrent(prods...)}
+		},
+
+		expected: upstream.expected,
+	}, fuzzInput, true
+}
+
+func readProducerTee(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	expected := upstream.expected
+	expected = append(expected, upstream.expected...)
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> tee"
+		},
+
+		upstream:        upstream,
+		order:           orderUnstable,
+		multiple:        multipleYes,
+		join:            joinConcurrent,
+		memoryIntensive: true,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams)*2)
+			for i, u := range upstreams {
+				prod1, prod2 := Tee(ctx, u)
+				prods[i*2] = prod1
+				prods[i*2+1] = prod2
+			}
+
+			return prods
+		},
+
+		expected: expected,
+	}, fuzzInput, true
+}
+
+func readProducerFilter(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	expected := []byte{}
+	for _, b := range upstream.expected {
+		if b%2 != 0 {
+			continue
+		}
+
+		expected = append(expected, b)
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> filter"
+		},
+
+		upstream: upstream,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			even := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) bool {
+				return elem%2 == 0
+			}
+
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = Filter(u, even)
+			}
+
+			return prods
+		},
+
+		expected: expected,
+	}, fuzzInput, true
+}
+
+func readProducerFilterConcurrent(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	expected := []byte{}
+	for _, b := range upstream.expected {
+		if b%2 != 0 {
+			continue
+		}
+
+		expected = append(expected, b)
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> filterConcurrent"
+		},
+
+		upstream: upstream,
+		order:    orderUnstable,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			even := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) bool {
+				return elem%2 == 0
+			}
+
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = Filter(u, even)
+			}
+
+			return prods
+		},
+
+		expected: expected,
+	}, fuzzInput, true
+}
+
+func readProducerDistinct(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	// current framework not suitable for multiple upstream producers
+	if upstream.multipleYes() {
+		return nil, nil, false
+	}
+
+	expected := make([]byte, 0, len(upstream.expected))
+
+	for _, byt := range upstream.expected {
+		if slices.Contains(expected, byt) {
+			continue
+		}
+
+		expected = append(expected, byt)
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> distinct"
+		},
+
+		upstream: upstream,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = Distinct(u)
+			}
+
+			return prods
+		},
+
+		expected: expected,
+	}, fuzzInput, true
+}
+
+func readProducerFlatMap(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	expected := make([]byte, len(upstream.expected)*2)
+	for i, b := range upstream.expected {
+		expected[i*2] = b
+		expected[i*2+1] = b / 4
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> flatMap"
+		},
+
+		upstream:        upstream,
+		memoryIntensive: true,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) ProducerFunc[byte] {
+				return Produce([]byte{elem, elem / 4})
+			}
+
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = FlatMap(u, mapp)
+			}
+
+			return prods
+		},
+
+		expected: expected,
+	}, fuzzInput, true
+}
+
+func readProducerFlatMapConcurrent(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, bool) {
+	t.Helper()
+
+	if upstream == nil {
+		return nil, nil, false
+	}
+
+	expected := make([]byte, len(upstream.expected)*2)
+	for i, b := range upstream.expected {
+		expected[i*2] = b
+		expected[i*2+1] = b / 4
+	}
+
+	return &fuzzProducer{
+		describe: func() string {
+			return upstream.describe() + " -> flatMap"
+		},
+
+		upstream:        upstream,
+		order:           orderUnstable,
+		memoryIntensive: true,
+
+		create: func(ctx context.Context) []ProducerFunc[byte] {
+			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) ProducerFunc[byte] {
+				return Produce([]byte{elem, elem / 4})
+			}
+
+			upstreams := upstream.create(ctx)
+
+			prods := make([]ProducerFunc[byte], len(upstreams))
+			for i, u := range upstreams {
+				prods[i] = FlatMapConcurrent(u, mapp)
+			}
+
+			return prods
 		},
 
 		expected: expected,
@@ -378,6 +909,10 @@ func readSlices(t *testing.T, fuzzInput []byte) ([][]byte, []byte, bool) {
 	}
 
 	num := int(fuzzInput[0])
+	if num > maxSlices {
+		return nil, nil, false
+	}
+
 	fuzzInput = fuzzInput[1:]
 
 	slices := make([][]byte, num)
@@ -407,6 +942,10 @@ func readSlice(t *testing.T, fuzzInput []byte) ([]byte, []byte, bool) {
 	}
 
 	length := int(fuzzInput[0])
+	if length > maxSliceLength {
+		return nil, nil, false
+	}
+
 	fuzzInput = fuzzInput[1:]
 
 	if len(fuzzInput) < length {
@@ -428,7 +967,7 @@ func readByte(t *testing.T, fuzzInput []byte) (byte, []byte, bool) {
 	return fuzzInput[0], fuzzInput[1:], true
 }
 
-func isEqualSlices[T any](t *testing.T, is *is.I, first []T, second []T) {
+func equalSlices[T comparable](t *testing.T, first []T, second []T) bool {
 	t.Helper()
 
 	if first == nil {
@@ -439,18 +978,81 @@ func isEqualSlices[T any](t *testing.T, is *is.I, first []T, second []T) {
 		second = []T{}
 	}
 
-	is.Equal(first, second)
+	if len(first) != len(second) {
+		return false
+	}
+
+	for idx := range first {
+		if first[idx] != second[idx] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (p *fuzzProducer) stableOrder() bool {
-	for prod := p; prod != nil; prod = prod.upstream {
-		switch prod.order {
-		case OrderUnstable:
+	for p := p; p != nil; p = p.upstream {
+		switch p.order {
+		case orderUnstable:
 			return false
-		case OrderStable:
+		case orderStable:
 			return true
 		}
 	}
 
 	panic("cannot determine order")
+}
+
+func (p *fuzzProducer) multipleYes() bool {
+	for p := p; p != nil; p = p.upstream {
+		switch p.multiple {
+		case multipleNo:
+			return false
+		case multipleYes:
+			return true
+		}
+	}
+
+	panic("cannot determine multiple")
+}
+
+func (p *fuzzProducer) joinConcurrent() bool {
+	for p := p; p != nil; p = p.upstream {
+		switch p.join {
+		case joinAny:
+			return false
+		case joinConcurrent:
+			return true
+		}
+	}
+
+	panic("cannot determine join")
+}
+
+func (p *fuzzProducer) length() int {
+	length := 0
+	for p := p; p != nil; p = p.upstream {
+		length++
+	}
+
+	return length
+}
+
+func (p *fuzzProducer) memoryIntensives() int {
+	num := 0
+
+	for p := p; p != nil; p = p.upstream {
+		if !p.memoryIntensive {
+			continue
+		}
+
+		num++
+	}
+
+	return num
+}
+
+func (e *unexpectedResultError) Error() string {
+	return fmt.Sprintf("%+v: unexpected result: expected %+v", e.actual, e.expected)
 }

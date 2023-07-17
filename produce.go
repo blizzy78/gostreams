@@ -92,7 +92,7 @@ func ProduceChannelConcurrent[T any](channels ...<-chan T) ProducerFunc[T] {
 
 // Split returns producers that produce the elements produced by prod split between them, in order.
 // The elements may not be split evenly between the producers. The new producers consume prod concurrently.
-func Split[T any](ctx context.Context, prod ProducerFunc[T]) (ProducerFunc[T], ProducerFunc[T], context.Context) {
+func Split[T any](ctx context.Context, prod ProducerFunc[T]) (ProducerFunc[T], ProducerFunc[T]) {
 	outCh1 := make(chan T)
 	outCh2 := make(chan T)
 
@@ -117,7 +117,7 @@ func Split[T any](ctx context.Context, prod ProducerFunc[T]) (ProducerFunc[T], P
 		}
 	}()
 
-	return prod1, prod2, ctx
+	return prod1, prod2
 }
 
 // Join returns a producer that produces the elements produced by the given producers, in order.
@@ -147,7 +147,8 @@ func JoinConcurrent[T any](producers ...ProducerFunc[T]) ProducerFunc[T] {
 
 // Tee returns producers that produce all elements produced by prod, in order.
 // The new producers consume prod concurrently.
-func Tee[T any](ctx context.Context, prod ProducerFunc[T]) (ProducerFunc[T], ProducerFunc[T], context.Context) {
+// The new producers must be consumed concurrently to avoid a deadlock (use JoinConcurrent instead of Join).
+func Tee[T any](ctx context.Context, prod ProducerFunc[T]) (ProducerFunc[T], ProducerFunc[T]) {
 	outCh1 := make(chan T)
 	outCh2 := make(chan T)
 
@@ -164,20 +165,13 @@ func Tee[T any](ctx context.Context, prod ProducerFunc[T]) (ProducerFunc[T], Pro
 		for elem := range prod(ctx, cancel) {
 			select {
 			case outCh1 <- elem:
-				select {
-				case outCh2 <- elem:
 
-				case <-ctx.Done():
-					return
-				}
+			case <-ctx.Done():
+				return
+			}
 
+			select {
 			case outCh2 <- elem:
-				select {
-				case outCh1 <- elem:
-
-				case <-ctx.Done():
-					return
-				}
 
 			case <-ctx.Done():
 				return
@@ -185,5 +179,5 @@ func Tee[T any](ctx context.Context, prod ProducerFunc[T]) (ProducerFunc[T], Pro
 		}
 	}()
 
-	return prod1, prod2, ctx
+	return prod1, prod2
 }

@@ -73,34 +73,34 @@ func MapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) Pr
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
 		outCh := make(chan U)
 
-		index := uint64(0)
-
-		grp := sync.WaitGroup{}
-
-		for elem := range prod(ctx, cancel) {
-			grp.Add(1)
-
-			go func(elem T, index uint64) {
-				defer grp.Done()
-
-				outElem := mapp(ctx, cancel, elem, index)
-
-				if contextDone(ctx) {
-					return
-				}
-
-				select {
-				case outCh <- outElem:
-
-				case <-ctx.Done():
-				}
-			}(elem, index)
-
-			index++
-		}
-
 		go func() {
 			defer close(outCh)
+
+			index := uint64(0)
+
+			grp := sync.WaitGroup{}
+
+			for elem := range prod(ctx, cancel) {
+				grp.Add(1)
+
+				go func(elem T, index uint64) {
+					defer grp.Done()
+
+					outElem := mapp(ctx, cancel, elem, index)
+
+					if contextDone(ctx) {
+						return
+					}
+
+					select {
+					case outCh <- outElem:
+
+					case <-ctx.Done():
+					}
+				}(elem, index)
+
+				index++
+			}
 
 			grp.Wait()
 		}()
@@ -113,20 +113,20 @@ func MapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) Pr
 // that produces elements of type U. The new producer produces all elements produced by the intermediate producers, in order.
 func FlatMap[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc[U]]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
-		prods := []ProducerFunc[U]{}
-		index := uint64(0)
-
-		for elem := range prod(ctx, cancel) {
-			prods = append(prods, mapp(ctx, cancel, elem, index))
-			index++
-		}
-
-		prod := Join(prods...)
-
 		outCh := make(chan U)
 
 		go func() {
 			defer close(outCh)
+
+			prods := []ProducerFunc[U]{}
+			index := uint64(0)
+
+			for elem := range prod(ctx, cancel) {
+				prods = append(prods, mapp(ctx, cancel, elem, index))
+				index++
+			}
+
+			prod := Join(prods...)
 
 			for elem := range prod(ctx, cancel) {
 				select {
@@ -146,20 +146,20 @@ func FlatMap[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc
 // that produces elements of type U. The new producer produces all elements produced by the intermediate producers, in undefined order.
 func FlatMapConcurrent[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, ProducerFunc[U]]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
-		prods := []ProducerFunc[U]{}
-		index := uint64(0)
-
-		for elem := range prod(ctx, cancel) {
-			prods = append(prods, mapp(ctx, cancel, elem, index))
-			index++
-		}
-
-		prod := JoinConcurrent(prods...)
-
 		outCh := make(chan U)
 
 		go func() {
 			defer close(outCh)
+
+			prods := []ProducerFunc[U]{}
+			index := uint64(0)
+
+			for elem := range prod(ctx, cancel) {
+				prods = append(prods, mapp(ctx, cancel, elem, index))
+				index++
+			}
+
+			prod := JoinConcurrent(prods...)
 
 			for elem := range prod(ctx, cancel) {
 				select {
@@ -185,6 +185,7 @@ func Filter[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T
 			defer close(outCh)
 
 			index := uint64(0)
+
 			for elem := range prod(ctx, cancel) {
 				filterResult := filter(ctx, cancel, elem, index)
 
@@ -217,38 +218,38 @@ func FilterConcurrent[T any](prod ProducerFunc[T], filter PredicateFunc[T]) Prod
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
 		outCh := make(chan T)
 
-		index := uint64(0)
-
-		grp := sync.WaitGroup{}
-
-		for elem := range prod(ctx, cancel) {
-			grp.Add(1)
-
-			go func(elem T, index uint64) {
-				defer grp.Done()
-
-				filterResult := filter(ctx, cancel, elem, index)
-
-				if contextDone(ctx) {
-					return
-				}
-
-				if !filterResult {
-					return
-				}
-
-				select {
-				case outCh <- elem:
-
-				case <-ctx.Done():
-				}
-			}(elem, index)
-
-			index++
-		}
-
 		go func() {
 			defer close(outCh)
+
+			index := uint64(0)
+
+			grp := sync.WaitGroup{}
+
+			for elem := range prod(ctx, cancel) {
+				grp.Add(1)
+
+				go func(elem T, index uint64) {
+					defer grp.Done()
+
+					filterResult := filter(ctx, cancel, elem, index)
+
+					if contextDone(ctx) {
+						return
+					}
+
+					if !filterResult {
+						return
+					}
+
+					select {
+					case outCh <- elem:
+
+					case <-ctx.Done():
+					}
+				}(elem, index)
+
+				index++
+			}
 
 			grp.Wait()
 		}()
@@ -266,6 +267,7 @@ func Peek[T any](prod ProducerFunc[T], peek ConsumerFunc[T]) ProducerFunc[T] {
 			defer close(outCh)
 
 			index := uint64(0)
+
 			for elem := range prod(ctx, cancel) {
 				peek(ctx, cancel, elem, index)
 
@@ -359,19 +361,19 @@ func Skip[T any](prod ProducerFunc[T], num uint64) ProducerFunc[T] {
 // Sort returns a producer that consumes elements from prod, sorts them using sort, and produces them in sorted order.
 func Sort[T any](prod ProducerFunc[T], sort LessFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
-		result := []T{}
-		for elem := range prod(ctx, cancel) {
-			result = append(result, elem)
-		}
-
-		slices.SortFunc(result, func(a T, b T) bool {
-			return sort(ctx, cancel, a, b)
-		})
-
 		outCh := make(chan T)
 
 		go func() {
 			defer close(outCh)
+
+			result := []T{}
+			for elem := range prod(ctx, cancel) {
+				result = append(result, elem)
+			}
+
+			slices.SortFunc(result, func(a T, b T) bool {
+				return sort(ctx, cancel, a, b)
+			})
 
 			for _, elem := range result {
 				select {
