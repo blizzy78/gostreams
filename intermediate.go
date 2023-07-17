@@ -214,7 +214,7 @@ func Filter[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T
 
 // FilterConcurrent returns a producer that calls filter for each element produced by prod, and only produces elements for which
 // filter returns true. It produces elements in undefined order.
-func FilterConcurrent[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T] {
+func FilterConcurrent[T any](prod ProducerFunc[T], filter PredicateFunc[T]) ProducerFunc[T] { //nolint:gocognit // goroutine handling is a bit more involved
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
 		outCh := make(chan T)
 
