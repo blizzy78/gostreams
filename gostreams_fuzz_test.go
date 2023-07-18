@@ -4,10 +4,8 @@ package gostreams
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"golang.org/x/exp/slices"
 )
@@ -113,10 +111,6 @@ var consumerTypeToFunc = map[byte]func(*testing.T, *fuzzProducer, []byte) (*fuzz
 
 func FuzzAll(f *testing.F) {
 	f.Fuzz(func(t *testing.T, fuzzInput []byte) {
-		tmp := make([]byte, len(fuzzInput))
-		copy(tmp, fuzzInput)
-		fuzzInput = tmp
-
 		origFuzzInput := fuzzInput
 
 		fuzzProd, fuzzInput, ok := readProducer(t, fuzzInput)
@@ -139,16 +133,7 @@ func FuzzAll(f *testing.F) {
 
 		ctx := context.Background()
 
-		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-		defer cancel()
-
 		if err := fuzzCons.test(ctx); err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				t.Logf("%+v: %s -> %s: %s", origFuzzInput, fuzzProd.describe(), fuzzCons.describe(), err.Error())
-				t.SkipNow()
-				return
-			}
-
 			t.Fatalf("%+v: %s -> %s: %s", origFuzzInput, fuzzProd.describe(), fuzzCons.describe(), err.Error())
 		}
 	})
