@@ -544,6 +544,98 @@ func TestReadProducerPeek(t *testing.T) {
 	is.Equal(elems, []byte{1, 2, 3, 4, 5})
 }
 
+func TestReadConsumerReduceSlice(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
+
+		create: func(_ context.Context) []ProducerFunc[byte] {
+			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5}, []byte{6, 7, 8, 9, 10})}
+		},
+
+		expected: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, fuzzInput, ok := readConsumerReduceSlice(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.True(ok)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
+func TestReadConsumerAnyMatch(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
+
+		create: func(_ context.Context) []ProducerFunc[byte] {
+			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104})}
+		},
+
+		expected: []byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, fuzzInput, ok := readConsumerAnyMatch(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.True(ok)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
+func TestReadConsumerAllMatch(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
+
+		create: func(_ context.Context) []ProducerFunc[byte] {
+			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104})}
+		},
+
+		expected: []byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, fuzzInput, ok := readConsumerAllMatch(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.True(ok)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
+func TestReadConsumerCount(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag | multipleNoFlag | joinAnyFlag,
+
+		create: func(_ context.Context) []ProducerFunc[byte] {
+			return []ProducerFunc[byte]{Produce([]byte{1, 2, 3, 4, 5})}
+		},
+
+		expected: []byte{1, 2, 3, 4, 5},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, fuzzInput, ok := readConsumerCount(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.True(ok)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
 func TestReadSlices(t *testing.T) {
 	is := is.New(t)
 

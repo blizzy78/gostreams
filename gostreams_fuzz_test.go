@@ -39,6 +39,15 @@ const (
 	FlatMapProducerType
 	FlatMapConcurrentProducerType
 	PeekProducerType
+
+	NoMoreProducers = byte(255)
+)
+
+const (
+	ReduceSliceConsumerType = byte(iota + 1)
+	AnyMatchConsumerType
+	AllMatchConsumerType
+	CountConsumerType
 )
 
 const (
@@ -54,6 +63,11 @@ const (
 	memoryIntensiveFlag
 )
 
+type fuzzConsumer struct {
+	describe func() string
+	test     func(context.Context) error
+}
+
 type fuzzProducer struct {
 	describe func() string
 	upstream *fuzzProducer
@@ -64,9 +78,9 @@ type fuzzProducer struct {
 
 type flag uint8
 
-type unexpectedResultError struct {
-	actual   []byte
-	expected []byte
+type unexpectedResultError[T any] struct {
+	actual   T
+	expected T
 }
 
 var producerTypeToFunc = map[byte]func(*testing.T, []byte, *fuzzProducer) (*fuzzProducer, []byte, bool){
@@ -90,6 +104,13 @@ var producerTypeToFunc = map[byte]func(*testing.T, []byte, *fuzzProducer) (*fuzz
 	PeekProducerType:              readProducerPeek,
 }
 
+var consumerTypeToFunc = map[byte]func(*testing.T, *fuzzProducer, []byte) (*fuzzConsumer, []byte, bool){
+	ReduceSliceConsumerType: readConsumerReduceSlice,
+	AnyMatchConsumerType:    readConsumerAnyMatch,
+	AllMatchConsumerType:    readConsumerAllMatch,
+	CountConsumerType:       readConsumerCount,
+}
+
 func FuzzAll(f *testing.F) {
 	f.Fuzz(func(t *testing.T, fuzzInput []byte) {
 		tmp := make([]byte, len(fuzzInput))
@@ -99,6 +120,12 @@ func FuzzAll(f *testing.F) {
 		origFuzzInput := fuzzInput
 
 		fuzzProd, fuzzInput, ok := readProducer(t, fuzzInput)
+		if !ok {
+			t.SkipNow()
+			return
+		}
+
+		fuzzCons, fuzzInput, ok := readConsumer(t, fuzzProd, fuzzInput)
 		if !ok {
 			t.SkipNow()
 			return
@@ -115,44 +142,16 @@ func FuzzAll(f *testing.F) {
 		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 		defer cancel()
 
-		if err := testProducer(ctx, t, fuzzProd); err != nil {
+		if err := fuzzCons.test(ctx); err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
-				t.Logf("%+v: %s: took too long", origFuzzInput, fuzzProd.describe())
+				t.Logf("%+v: %s -> %s: %s", origFuzzInput, fuzzProd.describe(), fuzzCons.describe(), err.Error())
 				t.SkipNow()
 				return
 			}
 
-			t.Fatalf("%+v: %s: %s", origFuzzInput, fuzzProd.describe(), err.Error())
+			t.Fatalf("%+v: %s -> %s: %s", origFuzzInput, fuzzProd.describe(), fuzzCons.describe(), err.Error())
 		}
 	})
-}
-
-func testProducer(ctx context.Context, t *testing.T, fuzzProd *fuzzProducer) error { //nolint:thelper // not a helper function
-	prod := fuzzProd.create(ctx)[0]
-
-	elems, err := ReduceSlice(ctx, prod)
-	if err != nil {
-		return err
-	}
-
-	expected := fuzzProd.expected
-
-	if !fuzzProd.stableOrder() {
-		slices.Sort(elems)
-
-		expected = make([]byte, len(fuzzProd.expected))
-		copy(expected, fuzzProd.expected)
-		slices.Sort(expected)
-	}
-
-	if !equalSlices(t, elems, expected) {
-		return &unexpectedResultError{
-			actual:   elems,
-			expected: expected,
-		}
-	}
-
-	return nil
 }
 
 func readProducer(t *testing.T, fuzzInput []byte) (*fuzzProducer, []byte, bool) {
@@ -177,13 +176,17 @@ func readProducer(t *testing.T, fuzzInput []byte) (*fuzzProducer, []byte, bool) 
 			return nil, nil, false
 		}
 
-		newFuzzProd, newFuzzInput, ok := readProducerWithUpstream(t, fuzzInput, fuzzProd)
+		var (
+			newFuzzProd *fuzzProducer
+			ok          bool
+		)
+
+		newFuzzProd, fuzzInput, ok = readProducerWithUpstream(t, fuzzInput, fuzzProd)
 		if !ok {
 			break
 		}
 
 		fuzzProd = newFuzzProd
-		fuzzInput = newFuzzInput
 	}
 
 	if fuzzProd.multipleYes() {
@@ -203,9 +206,13 @@ func readProducerWithUpstream(t *testing.T, fuzzInput []byte, upstream *fuzzProd
 	typ := fuzzInput[0]
 	fuzzInput = fuzzInput[1:]
 
+	if upstream != nil && typ == NoMoreProducers {
+		return nil, fuzzInput, false
+	}
+
 	f, ok := producerTypeToFunc[typ]
 	if !ok {
-		return nil, nil, false
+		return nil, fuzzInput, false
 	}
 
 	return f(t, fuzzInput, upstream)
@@ -906,6 +913,184 @@ func readProducerPeek(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*
 	}, fuzzInput, true
 }
 
+func readConsumer(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, []byte, bool) {
+	t.Helper()
+
+	if len(fuzzInput) == 0 {
+		return nil, nil, false
+	}
+
+	typ := fuzzInput[0]
+	fuzzInput = fuzzInput[1:]
+
+	f, ok := consumerTypeToFunc[typ]
+	if !ok {
+		return nil, nil, false
+	}
+
+	return f(t, fuzzProd, fuzzInput)
+}
+
+func readConsumerReduceSlice(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, []byte, bool) {
+	t.Helper()
+
+	if fuzzProd.multipleYes() {
+		return nil, nil, false
+	}
+
+	return &fuzzConsumer{
+		describe: func() string {
+			return "reduceSlice"
+		},
+
+		test: func(ctx context.Context) error {
+			prod := fuzzProd.create(ctx)[0]
+
+			elems, err := ReduceSlice(ctx, prod)
+			if err != nil {
+				return err
+			}
+
+			expected := fuzzProd.expected
+
+			if !fuzzProd.stableOrder() {
+				slices.Sort(elems)
+
+				expected = make([]byte, len(fuzzProd.expected))
+				copy(expected, fuzzProd.expected)
+				slices.Sort(expected)
+			}
+
+			if !equalSlices(t, elems, expected) {
+				return &unexpectedResultError[[]byte]{
+					actual:   elems,
+					expected: expected,
+				}
+			}
+
+			return nil
+		},
+	}, fuzzInput, true
+}
+
+func readConsumerAnyMatch(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, []byte, bool) {
+	t.Helper()
+
+	if fuzzProd.multipleYes() {
+		return nil, nil, false
+	}
+
+	return &fuzzConsumer{
+		describe: func() string {
+			return "anyMatch"
+		},
+
+		test: func(ctx context.Context) error {
+			prod := fuzzProd.create(ctx)[0]
+
+			match, err := AnyMatch(ctx, prod, func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) bool {
+				return elem >= 100
+			})
+			if err != nil {
+				return err
+			}
+
+			expected := false
+			for _, b := range fuzzProd.expected {
+				if b < 100 {
+					continue
+				}
+
+				expected = true
+				break
+			}
+
+			if match != expected {
+				return &unexpectedResultError[bool]{
+					actual:   match,
+					expected: expected,
+				}
+			}
+
+			return nil
+		},
+	}, fuzzInput, true
+}
+
+func readConsumerAllMatch(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, []byte, bool) {
+	t.Helper()
+
+	if fuzzProd.multipleYes() {
+		return nil, nil, false
+	}
+
+	return &fuzzConsumer{
+		describe: func() string {
+			return "allMatch"
+		},
+
+		test: func(ctx context.Context) error {
+			prod := fuzzProd.create(ctx)[0]
+
+			allMatch, err := AllMatch(ctx, prod, func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) bool {
+				return elem >= 100
+			})
+			if err != nil {
+				return err
+			}
+
+			expected := true
+			for _, b := range fuzzProd.expected {
+				if b < 100 {
+					expected = false
+					break
+				}
+			}
+
+			if allMatch != expected {
+				return &unexpectedResultError[bool]{
+					actual:   allMatch,
+					expected: expected,
+				}
+			}
+
+			return nil
+		},
+	}, fuzzInput, true
+}
+
+func readConsumerCount(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, []byte, bool) {
+	t.Helper()
+
+	if fuzzProd.multipleYes() {
+		return nil, nil, false
+	}
+
+	return &fuzzConsumer{
+		describe: func() string {
+			return "allMatch"
+		},
+
+		test: func(ctx context.Context) error {
+			prod := fuzzProd.create(ctx)[0]
+
+			count, err := Count(ctx, prod)
+			if err != nil {
+				return err
+			}
+
+			if int(count) != len(fuzzProd.expected) {
+				return &unexpectedResultError[int]{
+					actual:   int(count),
+					expected: len(fuzzProd.expected),
+				}
+			}
+
+			return nil
+		},
+	}, fuzzInput, true
+}
+
 func readSlices(t *testing.T, fuzzInput []byte) ([][]byte, []byte, bool) {
 	t.Helper()
 
@@ -1061,6 +1246,6 @@ func (p *fuzzProducer) memoryIntensives() int {
 	return num
 }
 
-func (e *unexpectedResultError) Error() string {
+func (e *unexpectedResultError[T]) Error() string {
 	return fmt.Sprintf("%+v: unexpected result: expected %+v", e.actual, e.expected)
 }
