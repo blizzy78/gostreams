@@ -10,22 +10,21 @@ import (
 // The index is the 0-based index of elem, in the order produced by the upstream producer.
 type ConsumerFunc[T any] func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64)
 
-// AccumulatorFunc folds element elem into an internal accumulator and returns the result.
+// CollectorFunc folds element elem into an internal accumulator and returns the result so far.
 // The index is the 0-based index of elem, in the order produced by the upstream producer.
-type AccumulatorFunc[T any, R any] func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64) R
+type CollectorFunc[T any, R any] func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64) R
 
 // ErrShortCircuit is a generic error used to short-circuit a stream by canceling its context.
 var ErrShortCircuit = errors.New("short circuit")
 
-// Reduce calls reduce for each element produced by prod, folds them into an internal accumulator, and returns
-// the final result.
-// If the stream's context is canceled, it returns the result accumulated so far, and the cause of the cancellation.
+// Reduce calls coll for each element produced by prod, and returns the final result.
+// If the stream's context is canceled, it returns the result so far, and the cause of the cancellation.
 // If the cause of cancellation was ErrShortCircuit, it returns a nil error instead.
-func Reduce[T any, R any](ctx context.Context, prod ProducerFunc[T], reduce AccumulatorFunc[T, R]) (R, error) {
+func Reduce[T any, R any](ctx context.Context, prod ProducerFunc[T], coll CollectorFunc[T, R]) (R, error) {
 	var result R
 
 	err := Each(ctx, prod, func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64) {
-		result = reduce(ctx, cancel, elem, index)
+		result = coll(ctx, cancel, elem, index)
 	})
 
 	return result, err
