@@ -16,7 +16,13 @@ Code example
 
 ```go
 // construct a producer from a slice
-ints := Produce([]int{1, 2, 3, 4, 5})
+ints := Produce([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+
+// filter for even elements
+// since we only need the elements themselves, we can use FuncPredicate
+ints = Filter(ints, FuncPredicate(func(elem int) bool {
+	return elem%2 == 0
+}))
 
 // map elements by doubling them
 // since we only need the elements themselves, we can use FuncMapper
@@ -31,7 +37,7 @@ intStrs := Map(ints, FuncMapper(strconv.Itoa))
 strs, _ := ReduceSlice(context.Background(), intStrs)
 
 fmt.Printf("%+v\n", strs)
-// Output: [2 4 6 8 10]
+// Output: [4 8 12 16 20]
 ```
 
 
