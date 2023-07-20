@@ -19,12 +19,12 @@ func TestReadProducerSlice(t *testing.T) {
 	}
 
 	fuzzProd, fuzzInput, err := readProducerSlice(t, fuzzInput, nil)
-	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+	is.Equal(fuzzProd.expected(), []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
 }
@@ -39,12 +39,12 @@ func TestReadProducerChannel(t *testing.T) {
 	}
 
 	fuzzProd, fuzzInput, err := readProducerChannel(t, fuzzInput, nil)
-	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+	is.Equal(fuzzProd.expected(), []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
 }
@@ -59,12 +59,12 @@ func TestReadProducerChannelConcurrent(t *testing.T) {
 	}
 
 	fuzzProd, fuzzInput, err := readProducerChannelConcurrent(t, fuzzInput, nil)
-	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+	is.Equal(fuzzProd.expected(), []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	slices.Sort(elems)
 
@@ -77,23 +77,25 @@ func TestReadProducerLimit(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
 	}
 
 	fuzzInput := []byte{3}
 
 	fuzzProd, fuzzInput, err := readProducerLimit(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{1, 2, 3})
+	is.Equal(fuzzProd.expected(), []byte{1, 2, 3})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{1, 2, 3})
 }
@@ -104,23 +106,25 @@ func TestReadProducerLimit_UpstreamIsShorter(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2}), nil
 		},
 
-		expected: []byte{1, 2},
+		expected: func() []byte {
+			return []byte{1, 2}
+		},
 	}
 
 	fuzzInput := []byte{3}
 
 	fuzzProd, fuzzInput, err := readProducerLimit(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{1, 2})
+	is.Equal(fuzzProd.expected(), []byte{1, 2})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{1, 2})
 }
@@ -131,23 +135,25 @@ func TestReadProducerSkip(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
 	}
 
 	fuzzInput := []byte{3}
 
 	fuzzProd, fuzzInput, err := readProducerSkip(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{4, 5})
+	is.Equal(fuzzProd.expected(), []byte{4, 5})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{4, 5})
 }
@@ -158,23 +164,25 @@ func TestReadProducerSkip_UpstreamIsShorter(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2}), nil
 		},
 
-		expected: []byte{1, 2},
+		expected: func() []byte {
+			return []byte{1, 2}
+		},
 	}
 
 	fuzzInput := []byte{3}
 
 	fuzzProd, fuzzInput, err := readProducerSkip(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{})
+	is.Equal(fuzzProd.expected(), []byte{})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.True(len(elems) == 0)
 }
@@ -185,23 +193,25 @@ func TestReadProducerSort(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{3, 1, 5, 2, 4})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{3, 1, 5, 2, 4}), nil
 		},
 
-		expected: []byte{3, 1, 5, 2, 4},
+		expected: func() []byte {
+			return []byte{3, 1, 5, 2, 4}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerSort(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5})
+	is.Equal(fuzzProd.expected(), []byte{1, 2, 3, 4, 5})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{1, 2, 3, 4, 5})
 }
@@ -212,23 +222,25 @@ func TestReadProducerMap(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{10, 20, 30, 40, 50})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{10, 20, 30, 40, 50}), nil
 		},
 
-		expected: []byte{10, 20, 30, 40, 50},
+		expected: func() []byte {
+			return []byte{10, 20, 30, 40, 50}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerMap(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{5, 10, 15, 20, 25})
+	is.Equal(fuzzProd.expected(), []byte{5, 10, 15, 20, 25})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{5, 10, 15, 20, 25})
 }
@@ -239,23 +251,25 @@ func TestReadProducerMapConcurrent(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{10, 20, 30, 40, 50})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{10, 20, 30, 40, 50}), nil
 		},
 
-		expected: []byte{10, 20, 30, 40, 50},
+		expected: func() []byte {
+			return []byte{10, 20, 30, 40, 50}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerMapConcurrent(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{3, 6, 10, 13, 16})
+	is.Equal(fuzzProd.expected(), []byte{3, 6, 10, 13, 16})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	slices.Sort(elems)
 	is.Equal(elems, []byte{3, 6, 10, 13, 16})
@@ -267,23 +281,25 @@ func TestReadProducerJoin(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5}, []byte{6, 7, 8, 9, 10})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}, []byte{6, 7, 8, 9, 10}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerJoin(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+	is.Equal(fuzzProd.expected(), []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 }
@@ -294,23 +310,25 @@ func TestReadProducerJoinConcurrent(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5}, []byte{6, 7, 8, 9, 10})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}, []byte{6, 7, 8, 9, 10}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerJoinConcurrent(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+	is.Equal(fuzzProd.expected(), []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	slices.Sort(elems)
 
@@ -323,23 +341,25 @@ func TestReadProducerFilter(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerFilter(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{2, 4})
+	is.Equal(fuzzProd.expected(), []byte{2, 4})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{2, 4})
 }
@@ -350,23 +370,25 @@ func TestReadProducerFilterConcurrent(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerFilterConcurrent(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{2, 4})
+	is.Equal(fuzzProd.expected(), []byte{2, 4})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	slices.Sort(elems)
 	is.Equal(elems, []byte{2, 4})
@@ -378,23 +400,25 @@ func TestReadProducerDistinct(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 3, 2, 4, 1, 3, 4, 3, 2, 5, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 3, 2, 4, 1, 3, 4, 3, 2, 5, 5}), nil
 		},
 
-		expected: []byte{1, 3, 2, 4, 1, 3, 4, 3, 2, 5, 5},
+		expected: func() []byte {
+			return []byte{1, 3, 2, 4, 1, 3, 4, 3, 2, 5, 5}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerDistinct(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{1, 3, 2, 4, 5})
+	is.Equal(fuzzProd.expected(), []byte{1, 3, 2, 4, 5})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{1, 3, 2, 4, 5})
 }
@@ -405,23 +429,25 @@ func TestReadProducerFlatMap(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{10, 20, 30, 40, 50})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{10, 20, 30, 40, 50}), nil
 		},
 
-		expected: []byte{10, 20, 30, 40, 50},
+		expected: func() []byte {
+			return []byte{10, 20, 30, 40, 50}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerFlatMap(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{10, 2, 20, 5, 30, 7, 40, 10, 50, 12})
+	is.Equal(fuzzProd.expected(), []byte{10, 2, 20, 5, 30, 7, 40, 10, 50, 12})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{10, 2, 20, 5, 30, 7, 40, 10, 50, 12})
 }
@@ -432,23 +458,25 @@ func TestReadProducerFlatMapConcurrent(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{10, 20, 30, 40, 50})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{10, 20, 30, 40, 50}), nil
 		},
 
-		expected: []byte{10, 20, 30, 40, 50},
+		expected: func() []byte {
+			return []byte{10, 20, 30, 40, 50}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerFlatMapConcurrent(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{10, 2, 20, 5, 30, 7, 40, 10, 50, 12})
+	is.Equal(fuzzProd.expected(), []byte{10, 2, 20, 5, 30, 7, 40, 10, 50, 12})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	slices.Sort(elems)
 	is.Equal(elems, []byte{2, 5, 7, 10, 10, 12, 20, 30, 40, 50})
@@ -460,23 +488,25 @@ func TestReadProducerPeek(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
 	}
 
 	fuzzInput := []byte{}
 
 	fuzzProd, fuzzInput, err := readProducerPeek(t, fuzzInput, &upstream)
 	is.Equal(fuzzProd.upstream, &upstream)
-	is.Equal(fuzzProd.expected, []byte{1, 2, 3, 4, 5})
+	is.Equal(fuzzProd.expected(), []byte{1, 2, 3, 4, 5})
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, _ := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{1, 2, 3, 4, 5})
 }
@@ -487,11 +517,13 @@ func TestReadProducerCancel(t *testing.T) {
 	upstream := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
 	}
 
 	fuzzInput := []byte{}
@@ -502,7 +534,7 @@ func TestReadProducerCancel(t *testing.T) {
 	is.NoErr(err)
 
 	ctx := context.Background()
-	prods := fuzzProd.create(ctx)
+	prods, _ := fuzzProd.create(ctx)
 	elems, err := ReduceSlice(ctx, prods)
 	is.Equal(elems, []byte{1, 2})
 	is.True(errors.Is(err, errTestCancel))
@@ -514,16 +546,18 @@ func TestReadConsumerReduceSlice(t *testing.T) {
 	fuzzProd := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5}, []byte{6, 7, 8, 9, 10})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}, []byte{6, 7, 8, 9, 10}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+		},
 	}
 
 	fuzzInput := []byte{}
 
-	fuzzCons, fuzzInput, err := readConsumerReduceSlice(t, &fuzzProd, fuzzInput)
+	fuzzCons, err := readConsumerReduceSlice(t, &fuzzProd, fuzzInput)
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
@@ -537,16 +571,18 @@ func TestReadConsumerCollectMap(t *testing.T) {
 	fuzzProd := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
 	}
 
 	fuzzInput := []byte{}
 
-	fuzzCons, fuzzInput, err := readConsumerCollectMap(t, &fuzzProd, fuzzInput)
+	fuzzCons, err := readConsumerCollectMap(t, &fuzzProd, fuzzInput)
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
@@ -560,39 +596,18 @@ func TestReadConsumerCollectMapNoDuplicateKeys(t *testing.T) {
 	fuzzProd := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
 	}
 
 	fuzzInput := []byte{}
 
-	fuzzCons, fuzzInput, err := readConsumerCollectMapNoDuplicateKeys(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
-	is.NoErr(err)
-
-	ctx := context.Background()
-	is.NoErr(fuzzCons.test(ctx))
-}
-
-func TestReadConsumerCollectMapNoDuplicateKeys_DuplicateKeys(t *testing.T) {
-	is := is.New(t)
-
-	fuzzProd := fuzzProducer{
-		flags: orderStableFlag,
-
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 1, 2, 3, 4, 5})
-		},
-
-		expected: []byte{1, 1, 2, 3, 4, 5},
-	}
-
-	fuzzInput := []byte{}
-
-	fuzzCons, fuzzInput, err := readConsumerCollectMapNoDuplicateKeys(t, &fuzzProd, fuzzInput)
+	fuzzCons, err := readConsumerCollectMapNoDuplicateKeys(t, &fuzzProd, fuzzInput)
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
@@ -606,16 +621,18 @@ func TestReadConsumerCollectGroup(t *testing.T) {
 	fuzzProd := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{10, 11, 12, 13, 14})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{10, 11, 12, 13, 14}), nil
 		},
 
-		expected: []byte{10, 11, 12, 13, 14},
+		expected: func() []byte {
+			return []byte{10, 11, 12, 13, 14}
+		},
 	}
 
 	fuzzInput := []byte{}
 
-	fuzzCons, fuzzInput, err := readConsumerCollectGroup(t, &fuzzProd, fuzzInput)
+	fuzzCons, err := readConsumerCollectGroup(t, &fuzzProd, fuzzInput)
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
@@ -629,16 +646,18 @@ func TestReadConsumerCollectPartition(t *testing.T) {
 	fuzzProd := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{10, 11, 12, 13, 14})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{10, 11, 12, 13, 14}), nil
 		},
 
-		expected: []byte{10, 11, 12, 13, 14},
+		expected: func() []byte {
+			return []byte{10, 11, 12, 13, 14}
+		},
 	}
 
 	fuzzInput := []byte{}
 
-	fuzzCons, fuzzInput, err := readConsumerCollectPartition(t, &fuzzProd, fuzzInput)
+	fuzzCons, err := readConsumerCollectPartition(t, &fuzzProd, fuzzInput)
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
@@ -652,16 +671,18 @@ func TestReadConsumerAnyMatch(t *testing.T) {
 	fuzzProd := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104}
+		},
 	}
 
 	fuzzInput := []byte{}
 
-	fuzzCons, fuzzInput, err := readConsumerAnyMatch(t, &fuzzProd, fuzzInput)
+	fuzzCons, err := readConsumerAnyMatch(t, &fuzzProd, fuzzInput)
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
@@ -675,16 +696,18 @@ func TestReadConsumerAllMatch(t *testing.T) {
 	fuzzProd := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5, 100, 101, 102, 103, 104}
+		},
 	}
 
 	fuzzInput := []byte{}
 
-	fuzzCons, fuzzInput, err := readConsumerAllMatch(t, &fuzzProd, fuzzInput)
+	fuzzCons, err := readConsumerAllMatch(t, &fuzzProd, fuzzInput)
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
@@ -698,16 +721,18 @@ func TestReadConsumerCount(t *testing.T) {
 	fuzzProd := fuzzProducer{
 		flags: orderStableFlag,
 
-		create: func(_ context.Context) ProducerFunc[byte] {
-			return Produce([]byte{1, 2, 3, 4, 5})
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
 		},
 
-		expected: []byte{1, 2, 3, 4, 5},
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
 	}
 
 	fuzzInput := []byte{}
 
-	fuzzCons, fuzzInput, err := readConsumerCount(t, &fuzzProd, fuzzInput)
+	fuzzCons, err := readConsumerCount(t, &fuzzProd, fuzzInput)
 	is.Equal(fuzzInput, []byte{})
 	is.NoErr(err)
 
