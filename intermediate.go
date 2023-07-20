@@ -36,6 +36,13 @@ func FuncMapper[T any, U any](mapp Function[T, U]) MapperFunc[T, U] {
 	}
 }
 
+// FuncPredicate returns a predicate that calls pred for each element.
+func FuncPredicate[T any](pred Function[T, bool]) PredicateFunc[T] {
+	return func(_ context.Context, _ context.CancelCauseFunc, elem T, _ uint64) bool {
+		return pred(elem)
+	}
+}
+
 // Map returns a producer that calls mapp for each element produced by prod, mapping it to type U.
 func Map[T any, U any](prod ProducerFunc[T], mapp MapperFunc[T, U]) ProducerFunc[U] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan U {
@@ -437,7 +444,7 @@ func seenMap[T comparable]() SeenFunc[T] {
 
 // Identity returns a mapper that returns the same element it receives.
 func Identity[T any]() MapperFunc[T, T] {
-	return func(_ context.Context, _ context.CancelCauseFunc, elem T, _ uint64) T {
+	return FuncMapper(func(elem T) T {
 		return elem
-	}
+	})
 }

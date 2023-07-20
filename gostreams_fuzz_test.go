@@ -491,9 +491,9 @@ func readProducerMap(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*f
 		upstream: upstream,
 
 		create: func(ctx context.Context) ProducerFunc[byte] {
-			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) byte {
+			mapp := FuncMapper(func(elem byte) byte {
 				return elem / 2
-			}
+			})
 
 			return Map(upstream.create(ctx), mapp)
 		},
@@ -523,9 +523,9 @@ func readProducerMapConcurrent(t *testing.T, fuzzInput []byte, upstream *fuzzPro
 		flags:    orderUnstableFlag,
 
 		create: func(ctx context.Context) ProducerFunc[byte] {
-			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) byte {
+			mapp := FuncMapper(func(elem byte) byte {
 				return elem / 3
-			}
+			})
 
 			return MapConcurrent(upstream.create(ctx), mapp)
 		},
@@ -603,9 +603,9 @@ func readProducerFilter(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) 
 		upstream: upstream,
 
 		create: func(ctx context.Context) ProducerFunc[byte] {
-			even := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) bool {
+			even := FuncPredicate(func(elem byte) bool {
 				return elem%2 == 0
-			}
+			})
 
 			return Filter(upstream.create(ctx), even)
 		},
@@ -639,9 +639,9 @@ func readProducerFilterConcurrent(t *testing.T, fuzzInput []byte, upstream *fuzz
 		flags:    orderUnstableFlag,
 
 		create: func(ctx context.Context) ProducerFunc[byte] {
-			even := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) bool {
+			even := FuncPredicate(func(elem byte) bool {
 				return elem%2 == 0
-			}
+			})
 
 			return FilterConcurrent(upstream.create(ctx), even)
 		},
@@ -704,9 +704,9 @@ func readProducerFlatMap(t *testing.T, fuzzInput []byte, upstream *fuzzProducer)
 		flags:    memoryIntensiveFlag,
 
 		create: func(ctx context.Context) ProducerFunc[byte] {
-			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) ProducerFunc[byte] {
+			mapp := FuncMapper(func(elem byte) ProducerFunc[byte] {
 				return Produce([]byte{elem, elem / 4})
-			}
+			})
 
 			return FlatMap(upstream.create(ctx), mapp)
 		},
@@ -737,9 +737,9 @@ func readProducerFlatMapConcurrent(t *testing.T, fuzzInput []byte, upstream *fuz
 		flags:    orderUnstableFlag | memoryIntensiveFlag,
 
 		create: func(ctx context.Context) ProducerFunc[byte] {
-			mapp := func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) ProducerFunc[byte] {
+			mapp := FuncMapper(func(elem byte) ProducerFunc[byte] {
 				return Produce([]byte{elem, elem / 4})
-			}
+			})
 
 			return FlatMapConcurrent(upstream.create(ctx), mapp)
 		},
@@ -896,12 +896,12 @@ func readConsumerCollectMap(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []by
 			result, err := Reduce(
 				ctx, prod,
 				CollectMap(
-					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+					FuncMapper(func(elem byte) byte {
 						return elem * 2
-					},
-					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+					}),
+					FuncMapper(func(elem byte) byte {
 						return elem * 3
-					},
+					}),
 				),
 			)
 
@@ -965,12 +965,12 @@ func readConsumerCollectMapNoDuplicateKeys(t *testing.T, fuzzProd *fuzzProducer,
 			result, err := Reduce(
 				ctx, prod,
 				CollectMapNoDuplicateKeys(
-					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+					FuncMapper(func(elem byte) byte {
 						return elem * 2
-					},
-					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+					}),
+					FuncMapper(func(elem byte) byte {
 						return elem * 3
-					},
+					}),
 				),
 			)
 
@@ -1033,12 +1033,12 @@ func readConsumerCollectGroup(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []
 			result, err := Reduce(
 				ctx, prod,
 				CollectGroup(
-					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+					FuncMapper(func(elem byte) byte {
 						return elem % 10
-					},
-					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+					}),
+					FuncMapper(func(elem byte) byte {
 						return elem
-					},
+					}),
 				),
 			)
 
@@ -1094,12 +1094,12 @@ func readConsumerCollectPartition(t *testing.T, fuzzProd *fuzzProducer, fuzzInpu
 			result, err := Reduce(
 				ctx, prod,
 				CollectPartition(
-					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) bool {
+					FuncPredicate(func(elem byte) bool {
 						return elem%2 == 0
-					},
-					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+					}),
+					FuncMapper(func(elem byte) byte {
 						return elem
-					},
+					}),
 				),
 			)
 
@@ -1143,9 +1143,9 @@ func readConsumerAnyMatch(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte
 		test: func(ctx context.Context) error {
 			prod := fuzzProd.create(ctx)
 
-			match, err := AnyMatch(ctx, prod, func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) bool {
+			match, err := AnyMatch(ctx, prod, FuncPredicate(func(elem byte) bool {
 				return elem >= 100
-			})
+			}))
 
 			if err != nil {
 				if errors.Is(err, fuzzProd.acceptedError()) {
@@ -1188,9 +1188,9 @@ func readConsumerAllMatch(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte
 		test: func(ctx context.Context) error {
 			prod := fuzzProd.create(ctx)
 
-			allMatch, err := AllMatch(ctx, prod, func(_ context.Context, _ context.CancelCauseFunc, elem byte, _ uint64) bool {
+			allMatch, err := AllMatch(ctx, prod, FuncPredicate(func(elem byte) bool {
 				return elem >= 100
-			})
+			}))
 
 			if err != nil {
 				if errors.Is(err, fuzzProd.acceptedError()) {
