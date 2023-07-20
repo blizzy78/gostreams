@@ -43,6 +43,10 @@ const (
 
 const (
 	ReduceSliceConsumerType = byte(iota + 1)
+	CollectMapConsumerType
+	CollectMapNoDuplicateKeysConsumerType
+	CollectGroupConsumerType
+	CollectPartitionConsumerType
 	AnyMatchConsumerType
 	AllMatchConsumerType
 	CountConsumerType
@@ -99,10 +103,14 @@ var producerTypeToFunc = map[byte]func(*testing.T, []byte, *fuzzProducer) (*fuzz
 }
 
 var consumerTypeToFunc = map[byte]func(*testing.T, *fuzzProducer, []byte) (*fuzzConsumer, []byte, error){
-	ReduceSliceConsumerType: readConsumerReduceSlice,
-	AnyMatchConsumerType:    readConsumerAnyMatch,
-	AllMatchConsumerType:    readConsumerAllMatch,
-	CountConsumerType:       readConsumerCount,
+	ReduceSliceConsumerType:               readConsumerReduceSlice,
+	CollectMapConsumerType:                readConsumerCollectMap,
+	CollectMapNoDuplicateKeysConsumerType: readConsumerCollectMapNoDuplicateKeys,
+	CollectGroupConsumerType:              readConsumerCollectGroup,
+	CollectPartitionConsumerType:          readConsumerCollectPartition,
+	AnyMatchConsumerType:                  readConsumerAnyMatch,
+	AllMatchConsumerType:                  readConsumerAllMatch,
+	CountConsumerType:                     readConsumerCount,
 }
 
 var (
@@ -830,6 +838,14 @@ func readConsumerReduceSlice(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []b
 		},
 
 		test: func(ctx context.Context) error {
+			expected := fuzzProd.expected
+
+			if !fuzzProd.stableOrder() {
+				expected = make([]byte, len(fuzzProd.expected))
+				copy(expected, fuzzProd.expected)
+				slices.Sort(expected)
+			}
+
 			prod := fuzzProd.create(ctx)
 
 			elems, err := ReduceSlice(ctx, prod)
@@ -841,20 +857,273 @@ func readConsumerReduceSlice(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []b
 				return err
 			}
 
-			expected := fuzzProd.expected
-
 			if !fuzzProd.stableOrder() {
 				slices.Sort(elems)
-
-				expected = make([]byte, len(fuzzProd.expected))
-				copy(expected, fuzzProd.expected)
-				slices.Sort(expected)
 			}
 
 			if !equalSlices(t, elems, expected) {
 				return &unexpectedResultError[[]byte]{
 					actual:   elems,
 					expected: expected,
+				}
+			}
+
+			return nil
+		},
+	}, fuzzInput, nil
+}
+
+func readConsumerCollectMap(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, []byte, error) { //nolint:gocognit // map collector is a bit more involved
+	t.Helper()
+
+	if !fuzzProd.stableOrder() {
+		return nil, nil, errFuzzInput
+	}
+
+	return &fuzzConsumer{
+		describe: func() string {
+			return "collectMap"
+		},
+
+		test: func(ctx context.Context) error {
+			expected := map[byte]byte{}
+			for _, b := range fuzzProd.expected {
+				expected[b*2] = b * 3
+			}
+
+			prod := fuzzProd.create(ctx)
+
+			result, err := Reduce(
+				ctx, prod, map[byte]byte{},
+				CollectMap(
+					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+						return elem * 2
+					},
+					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+						return elem * 3
+					},
+				),
+			)
+
+			if err != nil {
+				if errors.Is(err, fuzzProd.acceptedError()) {
+					return nil
+				}
+
+				return err
+			}
+
+			if len(result) != len(expected) {
+				return &unexpectedResultError[map[byte]byte]{
+					actual:   result,
+					expected: expected,
+				}
+			}
+
+			for k, rv := range result {
+				if ev, ok := expected[k]; !ok || rv != ev {
+					return &unexpectedResultError[map[byte]byte]{
+						actual:   result,
+						expected: expected,
+					}
+				}
+			}
+
+			return nil
+		},
+	}, fuzzInput, nil
+}
+
+func readConsumerCollectMapNoDuplicateKeys(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, []byte, error) { //nolint:gocognit,cyclop // must match signature; map collector is a bit more involved
+	t.Helper()
+
+	if !fuzzProd.stableOrder() {
+		return nil, nil, errFuzzInput
+	}
+
+	return &fuzzConsumer{
+		describe: func() string {
+			return "collectMapNoDuplicateKeys"
+		},
+
+		test: func(ctx context.Context) error {
+			expected := map[byte]byte{}
+
+			expectDuplicateKeyErr := false
+
+			for _, b := range fuzzProd.expected { //nolint:varnamelen // b is fine here
+				if _, ok := expected[b*2]; ok {
+					expectDuplicateKeyErr = true
+					break
+				}
+
+				expected[b*2] = b * 3
+			}
+
+			prod := fuzzProd.create(ctx)
+
+			result, err := Reduce(
+				ctx, prod, map[byte]byte{},
+				CollectMapNoDuplicateKeys(
+					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+						return elem * 2
+					},
+					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+						return elem * 3
+					},
+				),
+			)
+
+			if err != nil {
+				if errors.Is(err, fuzzProd.acceptedError()) {
+					return nil
+				}
+
+				if expectDuplicateKeyErr {
+					var dupKeyError *DuplicateKeyError[byte, byte]
+					if errors.As(err, &dupKeyError) {
+						return nil
+					}
+				}
+
+				return err
+			}
+
+			if len(result) != len(expected) {
+				return &unexpectedResultError[map[byte]byte]{
+					actual:   result,
+					expected: expected,
+				}
+			}
+
+			for k, rv := range result {
+				if ev, ok := expected[k]; !ok || rv != ev {
+					return &unexpectedResultError[map[byte]byte]{
+						actual:   result,
+						expected: expected,
+					}
+				}
+			}
+
+			return nil
+		},
+	}, fuzzInput, nil
+}
+
+func readConsumerCollectGroup(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, []byte, error) { //nolint:gocognit // map collector is a bit more involved
+	t.Helper()
+
+	if !fuzzProd.stableOrder() {
+		return nil, nil, errFuzzInput
+	}
+
+	return &fuzzConsumer{
+		describe: func() string {
+			return "collectGroup"
+		},
+
+		test: func(ctx context.Context) error {
+			expected := map[byte][]byte{}
+			for _, b := range fuzzProd.expected {
+				expected[b%10] = append(expected[b%10], b)
+			}
+
+			prod := fuzzProd.create(ctx)
+
+			result, err := Reduce(
+				ctx, prod, map[byte][]byte{},
+				CollectGroup(
+					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+						return elem % 10
+					},
+					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+						return elem
+					},
+				),
+			)
+
+			if err != nil {
+				if errors.Is(err, fuzzProd.acceptedError()) {
+					return nil
+				}
+
+				return err
+			}
+
+			if len(result) != len(expected) {
+				return &unexpectedResultError[map[byte][]byte]{
+					actual:   result,
+					expected: expected,
+				}
+			}
+
+			for k, rv := range result {
+				if ev, ok := expected[k]; !ok || !slices.Equal(rv, ev) {
+					return &unexpectedResultError[map[byte][]byte]{
+						actual:   result,
+						expected: expected,
+					}
+				}
+			}
+
+			return nil
+		},
+	}, fuzzInput, nil
+}
+
+func readConsumerCollectPartition(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, []byte, error) { //nolint:gocognit // map collector is a bit more involved
+	t.Helper()
+
+	if !fuzzProd.stableOrder() {
+		return nil, nil, errFuzzInput
+	}
+
+	return &fuzzConsumer{
+		describe: func() string {
+			return "collectPartition"
+		},
+
+		test: func(ctx context.Context) error {
+			expected := map[bool][]byte{}
+			for _, b := range fuzzProd.expected {
+				expected[b%2 == 0] = append(expected[b%2 == 0], b)
+			}
+
+			prod := fuzzProd.create(ctx)
+
+			result, err := Reduce(
+				ctx, prod, map[bool][]byte{},
+				CollectPartition(
+					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) bool {
+						return elem%2 == 0
+					},
+					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
+						return elem
+					},
+				),
+			)
+
+			if err != nil {
+				if errors.Is(err, fuzzProd.acceptedError()) {
+					return nil
+				}
+
+				return err
+			}
+
+			if len(result) != len(expected) {
+				return &unexpectedResultError[map[bool][]byte]{
+					actual:   result,
+					expected: expected,
+				}
+			}
+
+			for k, rv := range result {
+				if ev, ok := expected[k]; !ok || !slices.Equal(rv, ev) {
+					return &unexpectedResultError[map[bool][]byte]{
+						actual:   result,
+						expected: expected,
+					}
 				}
 			}
 

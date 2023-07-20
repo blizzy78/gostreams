@@ -531,6 +531,121 @@ func TestReadConsumerReduceSlice(t *testing.T) {
 	is.NoErr(fuzzCons.test(ctx))
 }
 
+func TestReadConsumerCollectMap(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag,
+
+		create: func(_ context.Context) ProducerFunc[byte] {
+			return Produce([]byte{1, 2, 3, 4, 5})
+		},
+
+		expected: []byte{1, 2, 3, 4, 5},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, fuzzInput, err := readConsumerCollectMap(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.NoErr(err)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
+func TestReadConsumerCollectMapNoDuplicateKeys(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag,
+
+		create: func(_ context.Context) ProducerFunc[byte] {
+			return Produce([]byte{1, 2, 3, 4, 5})
+		},
+
+		expected: []byte{1, 2, 3, 4, 5},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, fuzzInput, err := readConsumerCollectMapNoDuplicateKeys(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.NoErr(err)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
+func TestReadConsumerCollectMapNoDuplicateKeys_DuplicateKeys(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag,
+
+		create: func(_ context.Context) ProducerFunc[byte] {
+			return Produce([]byte{1, 1, 2, 3, 4, 5})
+		},
+
+		expected: []byte{1, 1, 2, 3, 4, 5},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, fuzzInput, err := readConsumerCollectMapNoDuplicateKeys(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.NoErr(err)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
+func TestReadConsumerCollectGroup(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag,
+
+		create: func(_ context.Context) ProducerFunc[byte] {
+			return Produce([]byte{10, 11, 12, 13, 14})
+		},
+
+		expected: []byte{10, 11, 12, 13, 14},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, fuzzInput, err := readConsumerCollectGroup(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.NoErr(err)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
+func TestReadConsumerCollectPartition(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag,
+
+		create: func(_ context.Context) ProducerFunc[byte] {
+			return Produce([]byte{10, 11, 12, 13, 14})
+		},
+
+		expected: []byte{10, 11, 12, 13, 14},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, fuzzInput, err := readConsumerCollectPartition(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.NoErr(err)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
 func TestReadConsumerAnyMatch(t *testing.T) {
 	is := is.New(t)
 
