@@ -894,7 +894,7 @@ func readConsumerCollectMap(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []by
 			prod := fuzzProd.create(ctx)
 
 			result, err := Reduce(
-				ctx, prod, map[byte]byte{},
+				ctx, prod,
 				CollectMap(
 					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
 						return elem * 2
@@ -963,7 +963,7 @@ func readConsumerCollectMapNoDuplicateKeys(t *testing.T, fuzzProd *fuzzProducer,
 			prod := fuzzProd.create(ctx)
 
 			result, err := Reduce(
-				ctx, prod, map[byte]byte{},
+				ctx, prod,
 				CollectMapNoDuplicateKeys(
 					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
 						return elem * 2
@@ -1031,7 +1031,7 @@ func readConsumerCollectGroup(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []
 			prod := fuzzProd.create(ctx)
 
 			result, err := Reduce(
-				ctx, prod, map[byte][]byte{},
+				ctx, prod,
 				CollectGroup(
 					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) byte {
 						return elem % 10
@@ -1092,7 +1092,7 @@ func readConsumerCollectPartition(t *testing.T, fuzzProd *fuzzProducer, fuzzInpu
 			prod := fuzzProd.create(ctx)
 
 			result, err := Reduce(
-				ctx, prod, map[bool][]byte{},
+				ctx, prod,
 				CollectPartition(
 					func(_ context.Context, _ context.CancelCauseFunc, elem byte, index uint64) bool {
 						return elem%2 == 0

@@ -17,13 +17,17 @@ func TestReduce(t *testing.T) {
 
 	ints := Produce([]int{1, 2, 3, 4, 5})
 
-	summer := func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64, acc int) int {
+	sum := 0
+
+	summer := func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64) int {
 		is.Equal(index, uint64(elem-1))
 
-		return acc + elem
+		sum += elem
+
+		return sum
 	}
 
-	result, _ := Reduce(ctx, ints, 0, summer)
+	result, _ := Reduce(ctx, ints, summer)
 
 	is.Equal(result, 15)
 }
@@ -35,19 +39,23 @@ func TestReduce_Cancel(t *testing.T) {
 
 	ints := Produce([]int{1, 2, 3, 4, 5})
 
-	summer := func(_ context.Context, cancel context.CancelCauseFunc, elem int, index uint64, acc int) int {
+	sum := 0
+
+	summer := func(_ context.Context, cancel context.CancelCauseFunc, elem int, index uint64) int {
 		is.True(elem <= 3)
 		is.Equal(index, uint64(elem-1))
 
 		if elem == 3 {
 			cancel(nil)
-			return acc
+			return sum
 		}
 
-		return acc + elem
+		sum += elem
+
+		return sum
 	}
 
-	result, err := Reduce(ctx, ints, 0, summer)
+	result, err := Reduce(ctx, ints, summer)
 
 	is.Equal(result, 3)
 	is.True(errors.Is(err, context.Canceled))
@@ -60,7 +68,7 @@ func TestReduce_CollectMapNoDuplicateKeys(t *testing.T) {
 
 	ints := Produce([]int{1, 2, 3, 3, 4, 5})
 
-	result, err := Reduce(ctx, ints, map[string]int{}, CollectMapNoDuplicateKeys(itoa, Identity[int]()))
+	result, err := Reduce(ctx, ints, CollectMapNoDuplicateKeys(itoa, Identity[int]()))
 
 	is.Equal(result, map[string]int{
 		"1": 1,

@@ -10,29 +10,32 @@ import (
 // The index is the 0-based index of elem, in the order produced by the upstream producer.
 type ConsumerFunc[T any] func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64)
 
-// AccumulatorFunc folds element elem into the accumulator acc, returning acc, or a new accumulator.
+// AccumulatorFunc folds element elem into an internal accumulator and returns the result.
 // The index is the 0-based index of elem, in the order produced by the upstream producer.
-type AccumulatorFunc[T any, A any] func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64, acc A) A
+type AccumulatorFunc[T any, R any] func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64) R
 
 // ErrShortCircuit is a generic error used to short-circuit a stream by canceling its context.
 var ErrShortCircuit = errors.New("short circuit")
 
-// Reduce calls reduce for each element produced by prod, folding it into accumulator acc, returning the final accumulator.
-// If the stream's context is canceled, it returns the accumulator so far, and the cause of the cancellation.
+// Reduce calls reduce for each element produced by prod, folds them into an internal accumulator, and returns
+// the final result.
+// If the stream's context is canceled, it returns the result accumulated so far, and the cause of the cancellation.
 // If the cause of cancellation was ErrShortCircuit, it returns a nil error instead.
-func Reduce[T any, A any](ctx context.Context, prod ProducerFunc[T], acc A, reduce AccumulatorFunc[T, A]) (A, error) {
+func Reduce[T any, R any](ctx context.Context, prod ProducerFunc[T], reduce AccumulatorFunc[T, R]) (R, error) {
+	var result R
+
 	err := Each(ctx, prod, func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64) {
-		acc = reduce(ctx, cancel, elem, index, acc)
+		result = reduce(ctx, cancel, elem, index)
 	})
 
-	return acc, err
+	return result, err
 }
 
 // ReduceSlice returns a slice of all elements produced by prod.
 // If the stream's context is canceled, it returns the collected elements so far, and the cause of the cancellation.
 // If the cause of cancellation was ErrShortCircuit, it returns a nil error instead.
 func ReduceSlice[T any](ctx context.Context, prod ProducerFunc[T]) ([]T, error) {
-	return Reduce(ctx, prod, nil, CollectSlice[T]())
+	return Reduce(ctx, prod, CollectSlice[T]())
 }
 
 // Each calls each for each element produced by prod.

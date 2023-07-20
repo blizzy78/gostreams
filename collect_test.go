@@ -19,10 +19,9 @@ func TestCollectSlice(t *testing.T) {
 
 	collect := CollectSlice[int]()
 
-	ints := []int{}
-	ints = collect(ctx, cancel, 1, 0, ints)
-	ints = collect(ctx, cancel, 2, 1, ints)
-	ints = collect(ctx, cancel, 3, 2, ints)
+	collect(ctx, cancel, 1, 0)
+	collect(ctx, cancel, 2, 1)
+	ints := collect(ctx, cancel, 3, 2)
 
 	is.Equal(ints, []int{1, 2, 3})
 }
@@ -37,10 +36,9 @@ func TestCollectMap(t *testing.T) {
 
 	collect := CollectMap(Identity[int](), itoa)
 
-	mapp := map[int]string{}
-	mapp = collect(ctx, cancel, 1, 0, mapp)
-	mapp = collect(ctx, cancel, 2, 1, mapp)
-	mapp = collect(ctx, cancel, 3, 2, mapp)
+	collect(ctx, cancel, 1, 0)
+	collect(ctx, cancel, 2, 1)
+	mapp := collect(ctx, cancel, 3, 2)
 
 	is.Equal(mapp, map[int]string{
 		1: "1",
@@ -59,11 +57,10 @@ func TestCollectMap_DuplicateKey(t *testing.T) {
 
 	collect := CollectMap(Identity[int](), itoa)
 
-	mapp := map[int]string{}
-	mapp = collect(ctx, cancel, 1, 0, mapp)
-	mapp = collect(ctx, cancel, 2, 1, mapp)
-	mapp = collect(ctx, cancel, 3, 2, mapp)
-	mapp = collect(ctx, cancel, 3, 3, mapp)
+	collect(ctx, cancel, 1, 0)
+	collect(ctx, cancel, 2, 1)
+	collect(ctx, cancel, 3, 2)
+	mapp := collect(ctx, cancel, 3, 3)
 
 	is.Equal(mapp, map[int]string{
 		1: "1",
@@ -82,11 +79,10 @@ func TestCollectMapNoDuplicateKeys(t *testing.T) {
 
 	collect := CollectMapNoDuplicateKeys(itoa, Identity[int]())
 
-	mapp := map[string]int{}
-	mapp = collect(ctx, cancel, 1, 0, mapp)
-	mapp = collect(ctx, cancel, 2, 1, mapp)
-	mapp = collect(ctx, cancel, 3, 2, mapp)
-	mapp = collect(ctx, cancel, 3, 3, mapp)
+	collect(ctx, cancel, 1, 0)
+	collect(ctx, cancel, 2, 1)
+	collect(ctx, cancel, 3, 2)
+	mapp := collect(ctx, cancel, 3, 3)
 
 	is.Equal(mapp, map[string]int{
 		"1": 1,
@@ -114,12 +110,11 @@ func TestCollectGroup(t *testing.T) {
 
 	collect := CollectGroup(evenOddStr, Identity[int]())
 
-	mapp := map[string][]int{}
-	mapp = collect(ctx, cancel, 1, 0, mapp)
-	mapp = collect(ctx, cancel, 2, 1, mapp)
-	mapp = collect(ctx, cancel, 3, 2, mapp)
-	mapp = collect(ctx, cancel, 4, 3, mapp)
-	mapp = collect(ctx, cancel, 5, 4, mapp)
+	collect(ctx, cancel, 1, 0)
+	collect(ctx, cancel, 2, 1)
+	collect(ctx, cancel, 3, 2)
+	collect(ctx, cancel, 4, 3)
+	mapp := collect(ctx, cancel, 5, 4)
 
 	is.Equal(mapp, map[string][]int{
 		"odd":  {1, 3, 5},
@@ -137,12 +132,11 @@ func TestCollectPartition(t *testing.T) {
 
 	collect := CollectPartition(even, Identity[int]())
 
-	mapp := map[bool][]int{}
-	mapp = collect(ctx, cancel, 1, 0, mapp)
-	mapp = collect(ctx, cancel, 2, 1, mapp)
-	mapp = collect(ctx, cancel, 3, 2, mapp)
-	mapp = collect(ctx, cancel, 4, 3, mapp)
-	mapp = collect(ctx, cancel, 5, 4, mapp)
+	collect(ctx, cancel, 1, 0)
+	collect(ctx, cancel, 2, 1)
+	collect(ctx, cancel, 3, 2)
+	collect(ctx, cancel, 4, 3)
+	mapp := collect(ctx, cancel, 5, 4)
 
 	is.Equal(mapp, map[bool][]int{
 		false: {1, 3, 5},
