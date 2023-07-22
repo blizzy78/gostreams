@@ -315,3 +315,28 @@ func TestCount(t *testing.T) {
 
 	is.Equal(result, uint64(3))
 }
+
+func TestFirst(t *testing.T) {
+	is := is.New(t)
+
+	ctx := context.Background()
+
+	strs := Produce([]string{"foo", "bar", "baz"})
+
+	result, ok, _ := First(ctx, strs)
+
+	is.True(ok)
+	is.Equal(result, "foo")
+}
+
+func TestFirst_NoElements(t *testing.T) {
+	is := is.New(t)
+
+	ctx := context.Background()
+
+	strs := Produce([]string{})
+
+	_, ok, _ := First(ctx, strs)
+
+	is.True(!ok)
+}

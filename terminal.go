@@ -150,3 +150,24 @@ func Count[T any](ctx context.Context, prod ProducerFunc[T]) (uint64, error) {
 
 	return count, err
 }
+
+// First returns the first element produced by prod.
+// If prod produces an element, it cancels the stream's context using ErrShortCircuit, and returns
+// the element, a true bool result, and a nil error.
+// If prod does not produce elements, it returns a false bool result, and a nil error.
+// If the stream's context is canceled, it returns an undefined result, and the cause of the cancellation.
+func First[T any](ctx context.Context, prod ProducerFunc[T]) (T, bool, error) {
+	var (
+		first T
+		ok    bool
+	)
+
+	err := Each(ctx, prod, func(_ context.Context, cancel context.CancelCauseFunc, elem T, _ uint64) {
+		first = elem
+		ok = true
+
+		cancel(ErrShortCircuit)
+	})
+
+	return first, ok, err
+}

@@ -50,6 +50,7 @@ const (
 	AnyMatchConsumerType
 	AllMatchConsumerType
 	CountConsumerType
+	FirstConsumerType
 )
 
 const (
@@ -111,6 +112,7 @@ var consumerTypeToFunc = map[byte]func(*testing.T, *fuzzProducer, []byte) (*fuzz
 	AnyMatchConsumerType:                  readConsumerAnyMatch,
 	AllMatchConsumerType:                  readConsumerAllMatch,
 	CountConsumerType:                     readConsumerCount,
+	FirstConsumerType:                     readConsumerFirst,
 }
 
 var (
@@ -1388,6 +1390,55 @@ func readConsumerCount(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzCon
 				return &unexpectedResultError[int]{
 					actual:   int(count),
 					expected: len(expected),
+				}
+			}
+
+			return nil
+		},
+	}, nil
+}
+
+func readConsumerFirst(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) {
+	t.Helper()
+
+	if !fuzzProd.stableOrder() {
+		return nil, errFuzzInput
+	}
+
+	return &fuzzConsumer{
+		describe: func() string {
+			return "first"
+		},
+
+		test: func(ctx context.Context) error {
+			prod, err := fuzzProd.create(ctx)
+			if err != nil {
+				return err
+			}
+
+			result, ok, err := First(ctx, prod)
+			if err != nil {
+				if errors.Is(err, fuzzProd.acceptedError()) {
+					return nil
+				}
+
+				return err
+			}
+
+			expected := fuzzProd.expected()
+			expectedOk := len(expected) != 0
+
+			if ok != expectedOk {
+				return &unexpectedResultError[bool]{
+					actual:   ok,
+					expected: expectedOk,
+				}
+			}
+
+			if ok && result != expected[0] {
+				return &unexpectedResultError[byte]{
+					actual:   result,
+					expected: expected[0],
 				}
 			}
 

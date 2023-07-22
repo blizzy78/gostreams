@@ -740,6 +740,56 @@ func TestReadConsumerCount(t *testing.T) {
 	is.NoErr(fuzzCons.test(ctx))
 }
 
+func TestReadConsumerFirst(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag,
+
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{1, 2, 3, 4, 5}), nil
+		},
+
+		expected: func() []byte {
+			return []byte{1, 2, 3, 4, 5}
+		},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, err := readConsumerFirst(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.NoErr(err)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
+func TestReadConsumerFirst_NoElements(t *testing.T) {
+	is := is.New(t)
+
+	fuzzProd := fuzzProducer{
+		flags: orderStableFlag,
+
+		create: func(_ context.Context) (ProducerFunc[byte], error) {
+			return Produce([]byte{}), nil
+		},
+
+		expected: func() []byte {
+			return []byte{}
+		},
+	}
+
+	fuzzInput := []byte{}
+
+	fuzzCons, err := readConsumerFirst(t, &fuzzProd, fuzzInput)
+	is.Equal(fuzzInput, []byte{})
+	is.NoErr(err)
+
+	ctx := context.Background()
+	is.NoErr(fuzzCons.test(ctx))
+}
+
 func TestReadSlices(t *testing.T) {
 	is := is.New(t)
 
