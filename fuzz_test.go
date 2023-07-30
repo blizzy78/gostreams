@@ -816,6 +816,27 @@ func TestReadSlice(t *testing.T) {
 	is.NoErr(err)
 }
 
+func TestPeekInt(t *testing.T) {
+	is := is.New(t)
+
+	fuzzInput := []byte{123}
+
+	i, err := peekInt(t, fuzzInput)
+	is.Equal(i, 123)
+	is.NoErr(err)
+}
+
+func TestReadInt(t *testing.T) {
+	is := is.New(t)
+
+	fuzzInput := []byte{123}
+
+	i, fuzzInput, err := readInt(t, fuzzInput)
+	is.Equal(i, 123)
+	is.Equal(fuzzInput, []byte{})
+	is.NoErr(err)
+}
+
 func TestReadByte(t *testing.T) {
 	is := is.New(t)
 
