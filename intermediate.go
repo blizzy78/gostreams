@@ -19,8 +19,8 @@ type MapperFunc[T any, U any] func(ctx context.Context, cancel context.CancelCau
 // The index is the 0-based index of elem, in the order produced by the upstream producer.
 type PredicateFunc[T any] func(ctx context.Context, cancel context.CancelCauseFunc, elem T, index uint64) bool
 
-// LessFunc returns true if element a is "less" than element b.
-type LessFunc[T any] func(ctx context.Context, cancel context.CancelCauseFunc, a T, b T) bool
+// CompareFunc returns a negative number if a < b, a positive number if a > b, and zero if a == b.
+type CompareFunc[T any] func(ctx context.Context, cancel context.CancelCauseFunc, a T, b T) int
 
 // SeenFunc is a function that returns true if elem has been seen before.
 type SeenFunc[T any] func(elem T) bool
@@ -366,7 +366,7 @@ func Skip[T any](prod ProducerFunc[T], num uint64) ProducerFunc[T] {
 }
 
 // Sort returns a producer that consumes elements from prod, sorts them using sort, and produces them in sorted order.
-func Sort[T any](prod ProducerFunc[T], sort LessFunc[T]) ProducerFunc[T] {
+func Sort[T any](prod ProducerFunc[T], cmp CompareFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
 		outCh := make(chan T)
 
@@ -378,8 +378,8 @@ func Sort[T any](prod ProducerFunc[T], sort LessFunc[T]) ProducerFunc[T] {
 				result = append(result, elem)
 			}
 
-			slices.SortFunc(result, func(a T, b T) bool {
-				return sort(ctx, cancel, a, b)
+			slices.SortFunc(result, func(a T, b T) int {
+				return cmp(ctx, cancel, a, b)
 			})
 
 			for _, elem := range result {

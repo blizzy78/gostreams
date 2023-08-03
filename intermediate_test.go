@@ -188,8 +188,8 @@ func TestSort(t *testing.T) {
 
 	ints := Produce([]int{3, 1, 2, 4, 5})
 
-	ints = Sort(ints, func(_ context.Context, _ context.CancelCauseFunc, a int, b int) bool {
-		return a < b
+	ints = Sort(ints, func(_ context.Context, _ context.CancelCauseFunc, a int, b int) int {
+		return a - b
 	})
 
 	result, _ := ReduceSlice(ctx, ints)
@@ -204,13 +204,13 @@ func TestSort_Cancel(t *testing.T) {
 
 	ints := Produce([]int{3, 1, 2, 4, 5})
 
-	ints = Sort(ints, func(_ context.Context, cancel context.CancelCauseFunc, a int, b int) bool { //nolint:varnamelen // a and b are okay for sorting
+	ints = Sort(ints, func(_ context.Context, cancel context.CancelCauseFunc, a int, b int) int { //nolint:varnamelen // a and b are okay for sorting
 		if a == 4 || b == 4 {
 			cancel(nil)
-			return false
+			return 0
 		}
 
-		return a < b
+		return a - b
 	})
 
 	_, err := ReduceSlice(ctx, ints)

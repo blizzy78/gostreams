@@ -397,8 +397,8 @@ func readProducerSort(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*
 		flags:    orderStableFlag,
 
 		create: func(ctx context.Context) (ProducerFunc[byte], error) {
-			less := func(_ context.Context, _ context.CancelCauseFunc, a byte, b byte) bool {
-				return a < b
+			cmp := func(_ context.Context, _ context.CancelCauseFunc, a byte, b byte) int {
+				return int(a) - int(b)
 			}
 
 			upstreamProd, err := upstream.create(ctx)
@@ -406,7 +406,7 @@ func readProducerSort(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*
 				return nil, err
 			}
 
-			return Sort(upstreamProd, less), nil
+			return Sort(upstreamProd, cmp), nil
 		},
 
 		expected: func() []byte {
