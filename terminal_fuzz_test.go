@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
-
-	"golang.org/x/exp/slices"
 )
 
 const (

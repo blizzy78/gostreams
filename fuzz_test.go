@@ -3,10 +3,10 @@ package gostreams
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/matryer/is"
-	"golang.org/x/exp/slices"
 )
 
 func TestReadProducerSlice(t *testing.T) {

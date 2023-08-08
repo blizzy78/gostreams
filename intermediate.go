@@ -3,9 +3,8 @@ package gostreams
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
-
-	"golang.org/x/exp/slices"
 )
 
 // Function returns the result of applying an operation to elem.

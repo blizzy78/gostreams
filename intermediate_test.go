@@ -3,11 +3,11 @@ package gostreams
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"testing"
 
 	"github.com/matryer/is"
-	"golang.org/x/exp/slices"
 )
 
 func TestMap(t *testing.T) {

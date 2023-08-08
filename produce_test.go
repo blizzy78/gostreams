@@ -2,10 +2,10 @@ package gostreams
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/matryer/is"
-	"golang.org/x/exp/slices"
 )
 
 func TestProduce(t *testing.T) {
