@@ -364,7 +364,7 @@ func Skip[T any](prod ProducerFunc[T], num uint64) ProducerFunc[T] {
 	}
 }
 
-// Sort returns a producer that consumes elements from prod, sorts them using sort, and produces them in sorted order.
+// Sort returns a producer that consumes elements from prod, sorts them using cmp, and produces them in sorted order.
 func Sort[T any](prod ProducerFunc[T], cmp CompareFunc[T]) ProducerFunc[T] {
 	return func(ctx context.Context, cancel context.CancelCauseFunc) <-chan T {
 		outCh := make(chan T)
