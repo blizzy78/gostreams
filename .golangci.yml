@@ -12,10 +12,6 @@ issues:
     - (Expect directory permissions to be 0750 or less|Expect file permissions to be 0600 or less)
     # gosec: False positive is triggered by 'src, err := ioutil.ReadFile(filename)'
     - Potential file inclusion via variable
-    # documentation
-    - package-comments
-    - ST1000
-    - exported .* .* should have comment
 
 linters:
   enable:
@@ -23,6 +19,7 @@ linters:
     - bodyclose
     - cyclop
     - durationcheck
+    - errname
     - errorlint
     - exportloopref
     - forcetypeassert
@@ -41,20 +38,19 @@ linters:
     - predeclared
     - promlinter
     - revive
-    - rowserrcheck
-    - sqlclosecheck
     - stylecheck
     - thelper
     - tparallel
     - unconvert
     - unparam
     - varnamelen
-    - wastedassign
     - wrapcheck
     - wsl
   disable:
-    # broken?
-    - errname
+    # disabled for Go 1.19
+    - rowserrcheck
+    - sqlclosecheck
+    - wastedassign
 
 linters-settings:
   gocognit:
@@ -63,17 +59,15 @@ linters-settings:
     max-func-lines: 0
   nolintlint:
     allow-unused: false
-    allow-leading-space: false
     require-explanation: true
     require-specific: true
-  unused:
-    go: 1.21
   varnamelen:
     check-return: true
     ignore-type-assert-ok: true
     ignore-map-index-ok: true
     ignore-chan-recv-ok: true
     ignore-decls:
+      - ok bool
       - is *is.I
       - t testing.T
       - id string
@@ -84,7 +78,6 @@ linters-settings:
       - ch chan int
       - ch chan struct{}
       - ch chan byte
-      - ok bool
   wrapcheck:
     ignoreSigs:
       - .Errorf(

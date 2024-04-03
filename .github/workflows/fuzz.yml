@@ -12,5 +12,5 @@ jobs:
     steps:
       - uses: jidicula/go-fuzz-action@891563262ea6c61284a881290a84f8f709fca6df
         with:
-          go-version: '1.21'
+          go-version: '1.22'
           fuzz-time: 5m
