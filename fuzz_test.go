@@ -555,10 +555,7 @@ func TestReadConsumerReduceSlice(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerReduceSlice(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerReduceSlice(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()
@@ -580,10 +577,7 @@ func TestReadConsumerCollectMap(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerCollectMap(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerCollectMap(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()
@@ -605,10 +599,7 @@ func TestReadConsumerCollectMapNoDuplicateKeys(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerCollectMapNoDuplicateKeys(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerCollectMapNoDuplicateKeys(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()
@@ -630,10 +621,7 @@ func TestReadConsumerCollectGroup(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerCollectGroup(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerCollectGroup(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()
@@ -655,10 +643,7 @@ func TestReadConsumerCollectPartition(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerCollectPartition(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerCollectPartition(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()
@@ -680,10 +665,7 @@ func TestReadConsumerAnyMatch(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerAnyMatch(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerAnyMatch(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()
@@ -705,10 +687,7 @@ func TestReadConsumerAllMatch(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerAllMatch(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerAllMatch(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()
@@ -730,10 +709,7 @@ func TestReadConsumerCount(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerCount(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerCount(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()
@@ -755,10 +731,7 @@ func TestReadConsumerFirst(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerFirst(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerFirst(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()
@@ -780,10 +753,7 @@ func TestReadConsumerFirst_NoElements(t *testing.T) {
 		},
 	}
 
-	fuzzInput := []byte{}
-
-	fuzzCons, err := readConsumerFirst(t, &fuzzProd, fuzzInput)
-	is.Equal(fuzzInput, []byte{})
+	fuzzCons, err := readConsumerFirst(t, &fuzzProd)
 	is.NoErr(err)
 
 	ctx := context.Background()

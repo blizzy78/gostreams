@@ -30,7 +30,7 @@ type unexpectedResultError[T any] struct {
 	expected T
 }
 
-var consumerTypeToFunc = map[int]func(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, error){
+var consumerTypeToFunc = map[int]func(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error){
 	ReduceSliceConsumerType:               readConsumerReduceSlice,
 	CollectMapConsumerType:                readConsumerCollectMap,
 	CollectMapNoDuplicateKeysConsumerType: readConsumerCollectMapNoDuplicateKeys,
@@ -45,7 +45,7 @@ var consumerTypeToFunc = map[int]func(t *testing.T, fuzzProd *fuzzProducer, fuzz
 func readConsumer(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, error) {
 	t.Helper()
 
-	typ, fuzzInput, err := readInt(t, fuzzInput)
+	typ, _, err := readInt(t, fuzzInput)
 	if err != nil {
 		return nil, err
 	}
@@ -55,10 +55,10 @@ func readConsumer(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzz
 		return nil, errFuzzInput
 	}
 
-	return f(t, fuzzProd, fuzzInput)
+	return f(t, fuzzProd)
 }
 
-func readConsumerReduceSlice(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) { //nolint:unparam // must match signature
+func readConsumerReduceSlice(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error) { //nolint:unparam // must match signature
 	t.Helper()
 
 	return &fuzzConsumer{
@@ -107,7 +107,7 @@ func readConsumerReduceSlice(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*f
 	}, nil
 }
 
-func readConsumerCollectMap(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) { //nolint:gocognit // map collector is a bit more involved
+func readConsumerCollectMap(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error) { //nolint:gocognit // map collector is a bit more involved
 	t.Helper()
 
 	if !fuzzProd.stableOrder() {
@@ -171,7 +171,7 @@ func readConsumerCollectMap(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fu
 	}, nil
 }
 
-func readConsumerCollectMapNoDuplicateKeys(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) { //nolint:gocognit,cyclop // must match signature; map collector is a bit more involved
+func readConsumerCollectMapNoDuplicateKeys(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error) { //nolint:gocognit,cyclop // must match signature; map collector is a bit more involved
 	t.Helper()
 
 	if !fuzzProd.stableOrder() {
@@ -240,7 +240,7 @@ func readConsumerCollectMapNoDuplicateKeys(t *testing.T, fuzzProd *fuzzProducer,
 	}, nil
 }
 
-func readConsumerCollectGroup(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) { //nolint:gocognit // map collector is a bit more involved
+func readConsumerCollectGroup(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error) { //nolint:gocognit // map collector is a bit more involved
 	t.Helper()
 
 	if !fuzzProd.stableOrder() {
@@ -304,7 +304,7 @@ func readConsumerCollectGroup(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*
 	}, nil
 }
 
-func readConsumerCollectPartition(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) { //nolint:gocognit // map collector is a bit more involved
+func readConsumerCollectPartition(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error) { //nolint:gocognit // map collector is a bit more involved
 	t.Helper()
 
 	if !fuzzProd.stableOrder() {
@@ -368,7 +368,7 @@ func readConsumerCollectPartition(t *testing.T, fuzzProd *fuzzProducer, _ []byte
 	}, nil
 }
 
-func readConsumerAnyMatch(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) { //nolint:unparam // must match signature
+func readConsumerAnyMatch(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error) { //nolint:unparam // must match signature
 	t.Helper()
 
 	return &fuzzConsumer{
@@ -416,7 +416,7 @@ func readConsumerAnyMatch(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzz
 	}, nil
 }
 
-func readConsumerAllMatch(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) { //nolint:unparam // must match signature
+func readConsumerAllMatch(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error) { //nolint:unparam // must match signature
 	t.Helper()
 
 	return &fuzzConsumer{
@@ -462,7 +462,7 @@ func readConsumerAllMatch(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzz
 	}, nil
 }
 
-func readConsumerCount(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) { //nolint:unparam // must match signature
+func readConsumerCount(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error) { //nolint:unparam // must match signature
 	t.Helper()
 
 	return &fuzzConsumer{
@@ -498,7 +498,7 @@ func readConsumerCount(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzCon
 	}, nil
 }
 
-func readConsumerFirst(t *testing.T, fuzzProd *fuzzProducer, _ []byte) (*fuzzConsumer, error) {
+func readConsumerFirst(t *testing.T, fuzzProd *fuzzProducer) (*fuzzConsumer, error) {
 	t.Helper()
 
 	if !fuzzProd.stableOrder() {
