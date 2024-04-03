@@ -831,7 +831,7 @@ func readProducerCancel(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) 
 
 			num := uint64(0)
 
-			return Peek(upstreamProd, func(_ context.Context, cancel context.CancelCauseFunc, elem byte, index uint64) {
+			return Peek(upstreamProd, func(_ context.Context, cancel context.CancelCauseFunc, _ byte, _ uint64) {
 				if num < uint64(max) {
 					num++
 					return

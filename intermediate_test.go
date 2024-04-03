@@ -280,6 +280,7 @@ func TestLimit(t *testing.T) { //nolint:gocognit // it's a bit more involved
 
 			ints = FlatMap(ints, func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64) ProducerFunc[int] {
 				is.Equal(index, expectedIndex)
+
 				expectedIndex++
 
 				elems := make([]int, elem)

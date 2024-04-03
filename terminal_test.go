@@ -222,6 +222,7 @@ func TestAnyMatch(t *testing.T) {
 
 			greaterThan10 := func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64) bool {
 				is.Equal(index, expectedIndex)
+
 				expectedIndex++
 
 				return elem > 10
@@ -291,6 +292,7 @@ func TestAllMatch(t *testing.T) {
 
 			lessThan10 := func(_ context.Context, _ context.CancelCauseFunc, elem int, index uint64) bool {
 				is.Equal(index, expectedIndex)
+
 				expectedIndex++
 
 				return elem < 10

@@ -30,6 +30,7 @@ func FuzzAll(f *testing.F) {
 			}
 
 			t.Fatalf("%+v: %s", origFuzzInput, err.Error())
+
 			return
 		}
 
