@@ -22,7 +22,7 @@ const (
 
 type fuzzConsumer struct {
 	describe func() string
-	test     func(context.Context) error
+	test     func(ctx context.Context) error
 }
 
 type unexpectedResultError[T any] struct {
@@ -30,7 +30,7 @@ type unexpectedResultError[T any] struct {
 	expected T
 }
 
-var consumerTypeToFunc = map[int]func(*testing.T, *fuzzProducer, []byte) (*fuzzConsumer, error){
+var consumerTypeToFunc = map[int]func(t *testing.T, fuzzProd *fuzzProducer, fuzzInput []byte) (*fuzzConsumer, error){
 	ReduceSliceConsumerType:               readConsumerReduceSlice,
 	CollectMapConsumerType:                readConsumerCollectMap,
 	CollectMapNoDuplicateKeysConsumerType: readConsumerCollectMapNoDuplicateKeys,

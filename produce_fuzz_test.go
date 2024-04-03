@@ -43,14 +43,14 @@ type fuzzProducer struct {
 	describe    func() string
 	upstream    *fuzzProducer
 	flags       producerFlag
-	create      func(context.Context) (ProducerFunc[byte], error)
+	create      func(ctx context.Context) (ProducerFunc[byte], error)
 	expected    func() []byte
 	acceptedErr error
 }
 
 type producerFlag uint8
 
-var producerTypeToFunc = map[int]func(*testing.T, []byte, *fuzzProducer) (*fuzzProducer, []byte, error){
+var producerTypeToFunc = map[int]func(t *testing.T, fuzzInput []byte, upstream *fuzzProducer) (*fuzzProducer, []byte, error){
 	SliceProducerType:             readProducerSlice,
 	ChannelProducerType:           readProducerChannel,
 	ChannelConcurrentProducerType: readProducerChannelConcurrent,
